@@ -1,8 +1,8 @@
 # Note Nest
 
-A playful, mobile-first first slice for kids learning beginner music theory and piano. It includes a guided note-name lesson, an interactive treble staff, touch-friendly piano keys with optional Web Audio, and a quick identification quiz.
+A playful, mobile-first first slice for kids learning beginner music theory and piano. It includes a guided treble-clef lesson, an interactive staff with accurate C4–C5 pitch positions, touch-friendly piano keys with optional Web Audio, and a quick identification quiz. C4 is middle C, shown on a ledger line below the staff.
 
-The interface is Swedish by default. Use the visible **Svenska / English** language toggle to switch languages; the selection is saved in `localStorage` and restored on the next visit. Note letters remain A–G in both languages.
+The interface is Swedish by default. Use the visible **Svenska / English** language toggle to switch languages; the selection is saved in `localStorage` and restored on the next visit. The lesson covers the C4–C5 range (C4 middle C through the C5 above the treble staff).
 
 ## Local development
 
