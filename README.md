@@ -2,6 +2,8 @@
 
 A playful, mobile-first first slice for kids learning beginner music theory and piano. It includes a guided note-name lesson, an interactive treble staff, touch-friendly piano keys with optional Web Audio, and a quick identification quiz.
 
+The interface is Swedish by default. Use the visible **Svenska / English** language toggle to switch languages; the selection is saved in `localStorage` and restored on the next visit. Note letters remain A–G in both languages.
+
 ## Local development
 
 Requirements: Node.js 18+ and npm.
@@ -11,7 +13,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite. Validate a production build with `npm run build`; run the focused tests with `npm test`.
+Open the local URL shown by Vite. Validate a production build with `npm run build`; run the tests with `npm test -- --run`.
 
 ## Deploying to GitHub Pages
 
