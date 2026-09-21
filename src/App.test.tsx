@@ -247,15 +247,22 @@ describe('Note Nest lesson', () => {
     expect(screen.getByLabelText('Spela Blinka lilla stjärna').querySelectorAll('.song-sequence .current')).toHaveLength(1)
   })
 
-  it('lets players choose the Spain Is a Country song too', async () => {
+  it('offers the requested Spanien song and the opening of Für Elise', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: 'Låtar' }))
-    await user.click(screen.getByRole('button', { name: 'Spanien är ett land' }))
+    await user.click(screen.getByRole('button', { name: 'Spanien är ett land där man dansar tango' }))
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Spela Spanien är ett land' })).toBeInTheDocument()
-    expect(screen.getByText('SPANIEN ÄR ETT LAND · NOT 1 AV 12')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Spanien är ett land där man dansar tango' })).toBeInTheDocument()
+    expect(screen.getByText('SPANIEN ÄR ETT LAND DÄR MAN DANSAR TANGO · NOT 1 AV 11')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Låtar' }))
+    await user.click(screen.getByRole('button', { name: 'Für Elise (första delen)' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Für Elise (första delen)' })).toBeInTheDocument()
+    expect(screen.getByText('FÜR ELISE (FÖRSTA DELEN) · NOT 1 AV 9')).toBeInTheDocument()
+    expect(screen.getByText('Spela nästa ton: E4')).toBeInTheDocument()
   })
 
   it('shows a helpful message when microphone permission is denied', async () => {

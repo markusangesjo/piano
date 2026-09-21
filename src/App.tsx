@@ -11,6 +11,7 @@ export const BLACK_KEYS = [
 ] as const
 export type BlackKey = typeof BLACK_KEYS[number]['id']
 type PianoKey = Pitch | BlackKey
+type SongPitch = Pitch | 'A3' | 'B3' | 'D#4'
 type Language = 'sv' | 'en'
 type Tab = 'learn' | 'quiz' | 'practice' | 'song' | 'debug'
 type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error' | 'completed'
@@ -19,16 +20,18 @@ const LANGUAGE_KEY = 'note-nest-language'
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
 const TWINKLE_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
-const SPAIN_SEQUENCE = ['C4', 'D4', 'E4', 'F4', 'G4', 'G4', 'F4', 'E4', 'D4', 'C4', 'D4', 'C4'] as const
+const SPAIN_SEQUENCE = ['G4', 'G4', 'A4', 'G4', 'F4', 'E4', 'E4', 'D4', 'C4', 'D4', 'C4'] as const
+const FUR_ELISE_SEQUENCE = ['E4', 'D#4', 'E4', 'D#4', 'E4', 'B3', 'D4', 'C4', 'A3'] as const
 const UPCOMING_NOTES_SHOWN = 4
 const DEBUG_FEEDBACK_TIMEOUT_MS = 3000
-type SongId = 'twinkle' | 'spain'
-type SongDefinition = { id: SongId; sequence: readonly Pitch[]; title: Record<Language, string> }
+type SongId = 'twinkle' | 'spain' | 'fur-elise'
+type SongDefinition = { id: SongId; sequence: readonly SongPitch[]; title: Record<Language, string> }
 const SONGS: readonly SongDefinition[] = [
   { id: 'twinkle', sequence: TWINKLE_SEQUENCE, title: { sv: 'Blinka lilla stjärna', en: 'Twinkle Twinkle Little Star' } },
-  { id: 'spain', sequence: SPAIN_SEQUENCE, title: { sv: 'Spanien är ett land', en: 'Spain Is a Country' } },
+  { id: 'spain', sequence: SPAIN_SEQUENCE, title: { sv: 'Spanien är ett land där man dansar tango', en: 'Spain Is a Country Where You Dance Tango' } },
+  { id: 'fur-elise', sequence: FUR_ELISE_SEQUENCE, title: { sv: 'Für Elise (första delen)', en: 'Für Elise (first part)' } },
 ]
-const PITCH_TO_MIDI: Record<Pitch, number> = { C4: 60, D4: 62, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
+const PITCH_TO_MIDI: Record<SongPitch, number> = { A3: 57, B3: 59, C4: 60, D4: 62, 'D#4': 63, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
 const MIDI_LABELS: Record<number, string> = {
   60: 'C4',
   61: 'C♯4 / D♭4',
@@ -70,9 +73,12 @@ function midiToNoteLabel(midi: number): string | null {
   return NOTE_NAME_TEMPLATES[index](octave)
 }
 
-export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: number; frequency: number; color: string; hint: Record<Language, string> }> = {
+export const PITCH_INFO: Record<SongPitch, { letter: string; octave: number; y: number; frequency: number; color: string; hint: Record<Language, string> }> = {
+  A3: { letter: 'A', octave: 3, y: 170, frequency: 220, color: '#f8a23a', hint: { sv: 'A3 ligger under mitt-C.', en: 'A3 is below middle C.' } },
+  B3: { letter: 'B', octave: 3, y: 160, frequency: 246.94, color: '#ee6f8f', hint: { sv: 'B3 ligger under mitt-C.', en: 'B3 is below middle C.' } },
   C4: { letter: 'C', octave: 4, y: 150, frequency: 261.63, color: '#7d70dc', hint: { sv: 'C4 är mitt-C – precis mitt på pianot.', en: 'C4 is middle C — right at the heart of the piano.' } },
   D4: { letter: 'D', octave: 4, y: 140, frequency: 293.66, color: '#40bfa3', hint: { sv: 'D4 ligger i utrymmet under notlinjerna.', en: 'D4 sits in the space below the staff.' } },
+  'D#4': { letter: 'D♯', octave: 4, y: 140, frequency: 311.13, color: '#40bfa3', hint: { sv: 'D♯4 är den svarta tangenten mellan D4 och E4.', en: 'D♯4 is the black key between D4 and E4.' } },
   E4: { letter: 'E', octave: 4, y: 130, frequency: 329.63, color: '#efb342', hint: { sv: 'E4 ligger på den nedersta linjen.', en: 'E4 sits on the bottom line.' } },
   F4: { letter: 'F', octave: 4, y: 120, frequency: 349.23, color: '#ea8055', hint: { sv: 'F4 ligger i det första utrymmet.', en: 'F4 sits in the first space.' } },
   G4: { letter: 'G', octave: 4, y: 110, frequency: 392, color: '#5ca3df', hint: { sv: 'G4 ligger på den mittersta linjen.', en: 'G4 sits on the middle line.' } },
@@ -133,8 +139,8 @@ const COPY = {
     middleC: 'mitt-C',
     quizScope: 'Quizet använder bara vita tangenter (C4–C5).',
     playNote: (n: Pitch) => n === 'C4' ? 'Spela C4, mitt-C' : `Spela ${n}`,
-    staff: (n: Pitch) => `Diskantklav med tonen ${n}`,
-    titleStaff: (n: Pitch) => `Diskantklav med tonen ${n}`,
+    staff: (n: SongPitch) => `Diskantklav med tonen ${n}`,
+    titleStaff: (n: SongPitch) => `Diskantklav med tonen ${n}`,
     thisNote: (n: Pitch) => <>Den här tonen är <strong>{n}</strong>{n === 'C4' ? ' – mitt-C.' : '.'} {PITCH_INFO[n].hint.sv}</>,
     round: (n: number) => `SNABBQUIZ · RUNDA ${n}`,
     which: 'Vilken ton är <em>det här</em>?',
@@ -155,7 +161,7 @@ const COPY = {
     microphoneDenied: 'Mikrofonbehörighet nekades. Tillåt mikrofonen och försök igen.',
     microphoneError: 'Kunde inte starta mikrofonlyssning just nu.',
     microphoneCompleted: 'Mikrofonövningen är klar.',
-    target: (n: Pitch) => `Spela ${n} på ditt riktiga piano`,
+    target: (n: SongPitch) => `Spela ${n} på ditt riktiga piano`,
     detected: 'Hörd ton',
     detectedNone: 'Ingen stabil ton ännu',
     detectedCorrect: 'Rätt ton — vi går vidare!',
@@ -163,7 +169,7 @@ const COPY = {
     completed: '🎉 Du klarade hela mikrofonövningen!',
     restartPractice: 'Börja om övningen',
     songIntro: 'Spela melodin på ditt riktiga piano. Börja med tonen som visas på notlinjerna.',
-    songTarget: (n: Pitch) => `Spela nästa ton: ${n}`,
+    songTarget: (n: SongPitch) => `Spela nästa ton: ${n}`,
     songCompleted: (title: string) => `🎉 Du spelade hela ${title}!`,
     restartSong: 'Börja om låten',
     debug: 'Felsökning',
@@ -220,8 +226,8 @@ const COPY = {
     middleC: 'middle C',
     quizScope: 'The quiz uses white keys only (C4–C5).',
     playNote: (n: Pitch) => n === 'C4' ? 'Play C4, middle C' : `Play ${n}`,
-    staff: (n: Pitch) => `Treble staff showing pitch ${n}`,
-    titleStaff: (n: Pitch) => `Treble staff with pitch ${n}`,
+    staff: (n: SongPitch) => `Treble staff showing pitch ${n}`,
+    titleStaff: (n: SongPitch) => `Treble staff with pitch ${n}`,
     thisNote: (n: Pitch) => <>This pitch is <strong>{n}</strong>{n === 'C4' ? ' — middle C.' : '.'} {PITCH_INFO[n].hint.en}</>,
     round: (n: number) => `QUICK QUIZ · ROUND ${n}`,
     which: 'Which pitch is <em>this</em>?',
@@ -242,7 +248,7 @@ const COPY = {
     microphoneDenied: 'Microphone permission was denied. Allow it and try again.',
     microphoneError: 'Could not start microphone listening right now.',
     microphoneCompleted: 'The microphone practice is complete.',
-    target: (n: Pitch) => `Play ${n} on your real piano`,
+    target: (n: SongPitch) => `Play ${n} on your real piano`,
     detected: 'Heard pitch',
     detectedNone: 'No stable pitch yet',
     detectedCorrect: 'Correct pitch — moving on!',
@@ -250,7 +256,7 @@ const COPY = {
     completed: '🎉 You finished the whole microphone practice!',
     restartPractice: 'Restart practice',
     songIntro: 'Play the melody on your real piano. Start with the note shown on the staff.',
-    songTarget: (n: Pitch) => `Play the next note: ${n}`,
+    songTarget: (n: SongPitch) => `Play the next note: ${n}`,
     songCompleted: (title: string) => `🎉 You played the whole ${title}!`,
     restartSong: 'Restart song',
     debug: 'Debug',
@@ -460,12 +466,12 @@ function frequencyToMidi(frequency: number) {
   return Math.round(69 + 12 * Math.log2(frequency / 440))
 }
 
-function Staff({ pitch, copy, upcoming = [] }: { pitch: Pitch; copy: typeof COPY[Language]; upcoming?: readonly Pitch[] }) {
+function Staff({ pitch, copy, upcoming = [] }: { pitch: SongPitch; copy: typeof COPY[Language]; upcoming?: readonly SongPitch[] }) {
   const notes = [pitch, ...upcoming]
   const startX = 150
   const spacing = 60
   return <div className="staff-wrap" aria-label={copy.staff(pitch)}>
-    <svg className="staff" viewBox="0 0 500 180" role="img">
+    <svg className="staff" viewBox="0 0 500 200" role="img">
       <title>{copy.titleStaff(pitch)}</title>
       <text x="26" y="116" className="clef">𝄞</text>
       {[50, 70, 90, 110, 130].map((y) => <line key={y} x1="92" y1={y} x2="472" y2={y} className="staff-line" />)}
@@ -474,7 +480,8 @@ function Staff({ pitch, copy, upcoming = [] }: { pitch: Pitch; copy: typeof COPY
         const cx = startX + index * spacing
         const isCurrent = index === 0
         return <g key={`${n}-${index}`} className={isCurrent ? 'note-group current' : 'note-group upcoming'} opacity={isCurrent ? 1 : Math.max(0.35, 0.75 - index * 0.15)}>
-          {n === 'C4' && <line x1={cx - 23} y1="150" x2={cx + 23} y2="150" className="ledger-line" />}
+          {(n === 'C4' || n === 'A3') && <line x1={cx - 23} y1={info.y} x2={cx + 23} y2={info.y} className="ledger-line" />}
+          {n === 'D#4' && <text x={cx - 39} y={info.y + 6} className="accidental">♯</text>}
           <ellipse cx={cx} cy={info.y} rx={isCurrent ? 17 : 12} ry={isCurrent ? 12 : 9} fill={info.color} className="note-head" />
           {isCurrent && <line x1={cx + 16} y1={info.y} x2={cx + 16} y2={info.y - 51} className="stem" />}
           {isCurrent && <circle cx={cx - 6} cy={info.y - 4} r="3" fill="white" opacity=".75" />}
