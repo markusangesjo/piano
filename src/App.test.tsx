@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import App, { PITCHES, PITCH_INFO } from './App'
+import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
 
 describe('Note Nest lesson', () => {
   beforeEach(() => {
@@ -45,5 +45,26 @@ describe('Note Nest lesson', () => {
     expect(svg.querySelector('.ledger-line')).toHaveAttribute('y1', '150')
     await user.click(screen.getByRole('button', { name: 'Välj tonen E4' }))
     expect(svg.querySelector('.note-head')).toHaveAttribute('cy', '130')
+  })
+
+  it('renders all black keys, highlights a selected accidental, and marks middle C', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(BLACK_KEYS).toHaveLength(5)
+    expect(screen.getByRole('button', { name: 'Spela C♯4 / D♭4' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Spela A♯4 / B♭4' })).toBeInTheDocument()
+    expect(screen.getByText('mitt-C', { selector: '.middle-c-marker' })).toBeInTheDocument()
+    const blackKey = screen.getByRole('button', { name: 'Spela F♯4 / G♭4' })
+    await user.click(blackKey)
+    expect(blackKey).toHaveClass('active')
+  })
+
+  it('keeps the quiz scoped to white keys', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
+    expect(screen.getByText('Quizet använder bara vita tangenter (C4–C5).')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Spela C♯4 / D♭4' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Spela /i })).toHaveLength(PITCHES.length)
   })
 })

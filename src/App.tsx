@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 
 export const PITCHES = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'] as const
 export type Pitch = typeof PITCHES[number]
+export const BLACK_KEYS = [
+  { id: 'C#4/Db4', label: 'C♯4 / D♭4', frequency: 277.18 },
+  { id: 'D#4/Eb4', label: 'D♯4 / E♭4', frequency: 311.13 },
+  { id: 'F#4/Gb4', label: 'F♯4 / G♭4', frequency: 369.99 },
+  { id: 'G#4/Ab4', label: 'G♯4 / A♭4', frequency: 415.3 },
+  { id: 'A#4/Bb4', label: 'A♯4 / B♭4', frequency: 466.16 },
+] as const
+export type BlackKey = typeof BLACK_KEYS[number]['id']
+type PianoKey = Pitch | BlackKey
 type Language = 'sv' | 'en'
 const LANGUAGE_KEY = 'note-nest-language'
 export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: number; frequency: number; color: string; hint: Record<Language, string> }> = {
@@ -26,8 +35,8 @@ const COPY = {
     every: 'Varje ton har ett namn', seven: 'Vi börjar med åtta toner från C4 till C5: ', repeat: 'De följer varandra steg för steg!',
     names: 'Tonerna C4 till C5', choose: (n: Pitch) => `Välj tonen ${n}`, spot: 'Hitta den på notlinjerna',
     map: 'Diskantklavens fem linjer är en musikalisk karta. C4 är mitt-C på en hjälplinje under notlinjerna.',
-    play: 'Spela den på pianot', tap: 'Tryck på rätt tangent. Varje ton har sin egen frekvens och röst.',
-    ready: 'Jag är redo för quiz', keyboard: 'Pianoklaviatur från C4 till C5',
+    play: 'Spela den på pianot', tap: 'Tryck på rätt tangent. Varje ton har sin egen frekvens och röst.', blackKey: (n: string) => `Spela ${n}`,
+    ready: 'Jag är redo för quiz', keyboard: 'Pianoklaviatur från C4 till C5', middleC: 'mitt-C', quizScope: 'Quizet använder bara vita tangenter (C4–C5).',
     playNote: (n: Pitch) => n === 'C4' ? 'Spela C4, mitt-C' : `Spela ${n}`, staff: (n: Pitch) => `Diskantklav med tonen ${n}`, titleStaff: (n: Pitch) => `Diskantklav med tonen ${n}`,
     thisNote: (n: Pitch) => <>Den här tonen är <strong>{n}</strong>{n === 'C4' ? ' – mitt-C.' : '.'} {PITCH_INFO[n].hint.sv}</>,
     round: (n: number) => `SNABBQUIZ · RUNDA ${n}`, which: 'Vilken ton är <em>det här</em>?', read: 'Läs diskantklaven och tryck sedan på motsvarande tangent.',
@@ -42,8 +51,8 @@ const COPY = {
     every: 'Every pitch has a name', seven: 'We start with eight pitches from C4 to C5: ', repeat: 'They move up one step at a time!',
     names: 'Pitches C4 to C5', choose: (n: Pitch) => `Choose pitch ${n}`, spot: 'Spot it on the staff',
     map: 'The five treble-clef lines are a musical map. C4 is middle C on a ledger line below the staff.',
-    play: 'Play it on the piano', tap: 'Tap the matching key. Every pitch has its own frequency and voice.',
-    ready: 'I’m ready for a quiz', keyboard: 'Piano keyboard from C4 to C5',
+    play: 'Play it on the piano', tap: 'Tap the matching key. Every pitch has its own frequency and voice.', blackKey: (n: string) => `Play ${n}`,
+    ready: 'I’m ready for a quiz', keyboard: 'Piano keyboard from C4 to C5', middleC: 'middle C', quizScope: 'The quiz uses white keys only (C4–C5).',
     playNote: (n: Pitch) => n === 'C4' ? 'Play C4, middle C' : `Play ${n}`, staff: (n: Pitch) => `Treble staff showing pitch ${n}`, titleStaff: (n: Pitch) => `Treble staff with pitch ${n}`,
     thisNote: (n: Pitch) => <>This pitch is <strong>{n}</strong>{n === 'C4' ? ' — middle C.' : '.'} {PITCH_INFO[n].hint.en}</>,
     round: (n: number) => `QUICK QUIZ · ROUND ${n}`, which: 'Which pitch is <em>this</em>?', read: 'Read the treble staff, then tap its matching piano key.',
@@ -53,14 +62,14 @@ const COPY = {
   },
 } as const
 
-function playTone(pitch: Pitch) {
+function playTone(pitch: PianoKey) {
   try {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!AudioContextClass) return
     const context = new AudioContextClass()
     const osc = context.createOscillator()
     const gain = context.createGain()
-    osc.frequency.value = PITCH_INFO[pitch].frequency
+    osc.frequency.value = pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEYS.find((key) => key.id === pitch)?.frequency ?? 0
     osc.type = 'sine'
     gain.gain.setValueAtTime(0.0001, context.currentTime)
     gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.02)
@@ -87,9 +96,10 @@ function Staff({ pitch, copy }: { pitch: Pitch; copy: typeof COPY[Language] }) {
   </div>
 }
 
-function Piano({ active, onPick, copy }: { active: Pitch; onPick: (pitch: Pitch) => void; copy: typeof COPY[Language] }) {
-  return <div className="piano" aria-label={copy.keyboard}>
-    {PITCHES.map((pitch) => <button key={pitch} className={`white-key ${active === pitch ? 'active' : ''}`} style={{ '--key-color': PITCH_INFO[pitch].color } as React.CSSProperties} onClick={() => { onPick(pitch); playTone(pitch) }} aria-label={copy.playNote(pitch)}><span>{pitch}</span></button>)}
+function Piano({ active, onPick, copy, includeBlackKeys = true }: { active: PianoKey; onPick: (pitch: PianoKey) => void; copy: typeof COPY[Language]; includeBlackKeys?: boolean }) {
+  return <div className={`piano ${includeBlackKeys ? 'has-black-keys' : ''}`} aria-label={copy.keyboard}>
+    {PITCHES.map((pitch) => <button key={pitch} className={`white-key ${active === pitch ? 'active' : ''}`} style={{ '--key-color': PITCH_INFO[pitch].color } as React.CSSProperties} onClick={() => { onPick(pitch); playTone(pitch) }} aria-label={copy.playNote(pitch)}><span>{pitch}</span>{pitch === 'C4' && <small className="middle-c-marker">{copy.middleC}</small>}</button>)}
+    {includeBlackKeys && BLACK_KEYS.map((key, index) => <button key={key.id} className={`black-key ${active === key.id ? 'active' : ''}`} style={{ left: `${((index === 0 ? 1 : index === 1 ? 2 : index + 2) * 100) / 8}%` }} onClick={() => { onPick(key.id); playTone(key.id) }} aria-label={copy.blackKey(key.label)}><span>{key.label}</span></button>)}
   </div>
 }
 
@@ -100,6 +110,7 @@ function App() {
   const copy = COPY[language]
   const [tab, setTab] = useState<'learn' | 'quiz'>('learn')
   const [pitch, setPitch] = useState<Pitch>('C4')
+  const [selectedKey, setSelectedKey] = useState<PianoKey>('C4')
   const [quizPitch, setQuizPitch] = useState<Pitch>('E4')
   const [answer, setAnswer] = useState<Pitch | null>(null)
   const [streak, setStreak] = useState(0)
@@ -107,7 +118,7 @@ function App() {
 
   useEffect(() => { try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ } }, [language])
   useEffect(() => { setAnswer(null) }, [quizPitch])
-  const chooseAnswer = (choice: Pitch) => { setAnswer(choice); if (choice === quizPitch) { setStreak((s) => s + 1); playTone(choice) } else setStreak(0) }
+  const chooseAnswer = (choice: PianoKey) => { if (!PITCHES.includes(choice as Pitch)) return; const whiteChoice = choice as Pitch; setAnswer(whiteChoice); if (whiteChoice === quizPitch) { setStreak((s) => s + 1); playTone(whiteChoice) } else setStreak(0) }
   const nextQuestion = () => { setQuizPitch(quizChoices[Math.floor(Math.random() * quizChoices.length)]); setAnswer(null) }
 
   return <main>
@@ -120,13 +131,13 @@ function App() {
     <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button></nav>
     {tab === 'learn' ? <section className="page">
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
-      <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
+      <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
       <div className="lesson-card staff-card"><div className="card-copy"><span className="step">2</span><div><h2>{copy.spot}</h2><p>{copy.map}</p></div></div><Staff pitch={pitch} copy={copy} /><div className="note-caption" style={{ '--note-color': PITCH_INFO[pitch].color } as React.CSSProperties}><span className="caption-dot" />{copy.thisNote(pitch)}</div></div>
-      <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={pitch} onPick={setPitch} copy={copy} /></div>
+      <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={selectedKey} onPick={(key) => { setSelectedKey(key); if (PITCHES.includes(key as Pitch)) setPitch(key as Pitch) }} copy={copy} /></div>
       <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
     </section> : <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
-      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer ?? quizPitch} onPick={chooseAnswer} copy={copy} />{answer && <div className={`feedback ${answer === quizPitch ? 'correct' : 'oops'}`} role="status">{answer === quizPitch ? copy.nice(quizPitch) : copy.almost(answer)}</div>}</div>
+      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer ?? quizPitch} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className={`feedback ${answer === quizPitch ? 'correct' : 'oops'}`} role="status">{answer === quizPitch ? copy.nice(quizPitch) : copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
     </section>}
     <footer>{copy.footer}</footer>
