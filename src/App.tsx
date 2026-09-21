@@ -114,8 +114,9 @@ export async function resetAudioState() {
   }
 
   closingAudioContext = context
-  closingAudioContextPromise = context.close().finally(() => {
-    if (closingAudioContext === context) {
+  const closePromise = context.close()
+  closingAudioContextPromise = closePromise.finally(() => {
+    if (closingAudioContext === context && closingAudioContextPromise === closePromise) {
       closingAudioContext = null
       closingAudioContextPromise = null
     }
