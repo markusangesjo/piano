@@ -239,7 +239,7 @@ describe('Note Nest lesson', () => {
 
     await user.click(screen.getByRole('button', { name: 'Blinka lilla stjärna' }))
 
-    expect(screen.getByRole('heading', { name: 'Spela Blinka lilla stjärna' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Blinka lilla stjärna' })).toBeInTheDocument()
     expect(screen.getByText('BLINKA LILLA STJÄRNA · NOT 1 AV 42')).toBeInTheDocument()
     expect(screen.getByText('Spela nästa ton: C4')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Starta mikrofon' })).toBeInTheDocument()
