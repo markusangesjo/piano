@@ -34,4 +34,14 @@ describe('registerPWA', () => {
     expect(loadRegister).toHaveBeenCalledTimes(1)
     expect(registerSW).toHaveBeenCalledWith({ immediate: true })
   })
+
+  it('fails closed when the registration module cannot be loaded', async () => {
+    const loadRegister = vi.fn().mockRejectedValue(new Error('network'))
+
+    await expect(registerPWA({
+      isProd: true,
+      serviceWorker: {} as ServiceWorkerContainer,
+      loadRegister,
+    })).resolves.toBe(false)
+  })
 })

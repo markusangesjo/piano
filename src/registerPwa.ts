@@ -15,8 +15,12 @@ export async function registerPWA(options: RegisterPWAOptions = {}) {
 
   if (!isProd || !serviceWorker) return false
 
-  const { registerSW } = await loadRegister()
-  registerSW({ immediate: true })
+  try {
+    const { registerSW } = await loadRegister()
+    registerSW({ immediate: true })
 
-  return true
+    return true
+  } catch {
+    return false
+  }
 }
