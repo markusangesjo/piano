@@ -447,11 +447,14 @@ function App() {
   const [micStatus, setMicStatus] = useState<MicrophoneStatus>('idle')
   const [heardPitch, setHeardPitch] = useState<string | null>(null)
   const [heardCorrect, setHeardCorrect] = useState<boolean | null>(null)
+  const [selectedSongId, setSelectedSongId] = useState<SongId | null>(null)
   const quizChoices = useMemo(() => [...PITCHES].sort(() => Math.random() - 0.5), [quizPitch])
   const micStatusRef = useRef(micStatus)
   const songMode = tab === 'song'
-  const activeSequence = songMode ? SONG_SEQUENCE : PRACTICE_SEQUENCE
+  const selectedSong = selectedSongId ? SONGS.find((song) => song.id === selectedSongId) ?? null : null
+  const activeSequence = songMode && selectedSong ? selectedSong.sequence : PRACTICE_SEQUENCE
   const currentPracticePitch = activeSequence[practiceIndex] ?? activeSequence[activeSequence.length - 1]
+  const upcomingPitches = activeSequence.slice(practiceIndex + 1, practiceIndex + 1 + UPCOMING_NOTES_SHOWN)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -544,7 +547,15 @@ function App() {
   const openPracticeMode = (nextTab: 'practice' | 'song') => {
     stopMicrophone('idle')
     restartPractice()
+    if (nextTab === 'song') setSelectedSongId(null)
     setTab(nextTab)
+  }
+
+  const chooseSong = (songId: SongId) => {
+    stopMicrophone('idle')
+    restartPractice()
+    setSelectedSongId(songId)
+    setTab('song')
   }
 
   const chooseAnswer = (choice: PianoKey) => {
@@ -721,11 +732,12 @@ function App() {
                 ? copy.detectedWrong
                 : copy.detectedNone
 
-  const practiceTitle = songMode ? copy.songTitle : copy.microphoneTitle
+  const songTitleText = selectedSong ? selectedSong.title[language] : ''
+  const practiceTitle = songMode ? copy.songTitle(songTitleText) : copy.microphoneTitle
   const practiceLead = songMode ? copy.songLead : copy.practiceLead
   const practiceIntro = songMode ? copy.songIntro : copy.microphoneIntro
   const practiceTarget = songMode ? copy.songTarget(currentPracticePitch) : copy.target(currentPracticePitch)
-  const practiceCompleteMessage = songMode ? copy.songCompleted : copy.completed
+  const practiceCompleteMessage = songMode ? copy.songCompleted(songTitleText) : copy.completed
   const restartLabel = songMode ? copy.restartSong : copy.restartPractice
 
   return <main>
@@ -747,21 +759,26 @@ function App() {
       <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer === quizPitch ? answer : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
     </section> : <section className="page quiz-page">
-      <div className="intro"><p className="eyebrow">{songMode ? copy.songLesson(practiceComplete ? SONG_SEQUENCE.length : practiceIndex + 1, SONG_SEQUENCE.length) : copy.practiceLesson(practiceComplete ? PRACTICE_SEQUENCE.length : practiceIndex + 1, PRACTICE_SEQUENCE.length)}</p><h1>{practiceTitle}</h1><p className="lede">{practiceLead}</p></div>
-      <div className="quiz-card practice-card">
-        <div className="card-copy"><span className="step">{songMode ? '♫' : '🎙'}</span><div><h2>{practiceTitle}</h2><p>{practiceIntro}</p></div></div>
-        {songMode && <div className="song-sequence" aria-label={copy.songTitle}>{SONG_SEQUENCE.map((note, index) => <span key={`${note}-${index}`} className={index === practiceIndex ? 'current' : index < practiceIndex ? 'played' : ''}>{note.replace('4', '').replace('5', '')}</span>)}</div>}
-        {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} /><div className="practice-target"><strong>{practiceTarget}</strong><span>{microphoneMessage}</span></div></>}
-        {practiceComplete && <div className="practice-complete" role="status">{practiceCompleteMessage}</div>}
-        <div className={`feedback practice-feedback ${heardCorrect === true ? 'correct' : heardCorrect === false ? 'oops' : ''}`} role="status">
-          <strong>{copy.detected}:</strong> {heardPitchLabel}
-          <small>{practiceFeedback}</small>
+      {songMode && !selectedSong ? <>
+        <div className="intro"><p className="eyebrow">{copy.song}</p><h1>{copy.chooseSong}</h1></div>
+        <div className="song-picker">{SONGS.map((song) => <button key={song.id} type="button" className="song-option" onClick={() => chooseSong(song.id)}>{song.title[language]}</button>)}</div>
+      </> : <>
+        <div className="intro"><p className="eyebrow">{songMode ? copy.songLesson(songTitleText, practiceComplete ? activeSequence.length : practiceIndex + 1, activeSequence.length) : copy.practiceLesson(practiceComplete ? activeSequence.length : practiceIndex + 1, activeSequence.length)}</p><h1>{practiceTitle}</h1><p className="lede">{practiceLead}</p></div>
+        <div className="quiz-card practice-card">
+          <div className="card-copy"><span className="step">{songMode ? '♫' : '🎙'}</span><div><h2>{practiceTitle}</h2><p>{practiceIntro}</p></div></div>
+          {songMode && selectedSong && <div className="song-sequence" aria-label={copy.songTitle(songTitleText)}>{selectedSong.sequence.map((note, index) => <span key={`${note}-${index}`} className={index === practiceIndex ? 'current' : index < practiceIndex ? 'played' : ''}>{note.replace('4', '').replace('5', '')}</span>)}</div>}
+          {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} upcoming={upcomingPitches} /><div className="practice-target"><strong>{practiceTarget}</strong><span>{microphoneMessage}</span></div></>}
+          {practiceComplete && <div className="practice-complete" role="status">{practiceCompleteMessage}</div>}
+          <div className={`feedback practice-feedback ${heardCorrect === true ? 'correct' : heardCorrect === false ? 'oops' : ''}`} role="status">
+            <strong>{copy.detected}:</strong> {heardPitchLabel}
+            <small>{practiceFeedback}</small>
+          </div>
+          <div className="practice-actions">
+            {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
+            <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{restartLabel}</button>
+          </div>
         </div>
-        <div className="practice-actions">
-          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
-          <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{restartLabel}</button>
-        </div>
-      </div>
+      </>}
     </section>}
     <footer>{copy.footer} <span>·</span> <span>{copy.version(`v${APP_VERSION}`)}</span></footer>
   </main>
