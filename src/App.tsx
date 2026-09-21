@@ -51,7 +51,6 @@ function App() {
     try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ }
     document.documentElement.lang = language
   }, [language])
-  useEffect(() => { setAnswer(null) }, [quizPitch])
 
   // The listening loop lives in its own hook; App only decides which pitch the
   // learner has to play and what happens once that note has been matched.
@@ -120,6 +119,8 @@ function App() {
     }
   }
 
+  // Clearing the feedback belongs to the question change itself rather than to
+  // an effect on quizPitch, which would only schedule a second render.
   const nextQuestion = () => {
     setQuizPitch(pickNextQuizPitch(quizPitch))
     setAnswer(null)
