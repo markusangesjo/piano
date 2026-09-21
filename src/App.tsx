@@ -12,7 +12,7 @@ export const BLACK_KEYS = [
 export type BlackKey = typeof BLACK_KEYS[number]['id']
 type PianoKey = Pitch | BlackKey
 type Language = 'sv' | 'en'
-type Tab = 'learn' | 'quiz' | 'practice' | 'song'
+type Tab = 'learn' | 'quiz' | 'practice' | 'song' | 'debug'
 type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error' | 'completed'
 
 const LANGUAGE_KEY = 'note-nest-language'
@@ -131,6 +131,19 @@ const COPY = {
     songTarget: (n: Pitch) => `Spela nästa ton: ${n}`,
     songCompleted: '🎉 Du spelade hela Blinka lilla stjärna!',
     restartSong: 'Börja om låten',
+    debug: 'Felsökning',
+    debugEyebrow: 'FELSÖKNINGSLÄGE · TONIGENKÄNNING',
+    debugTitle: 'Se hur appen hör din ton',
+    debugLead: 'Spela en ton på ditt riktiga piano nära mikrofonen. Ingen övning att klara — bara ren analys av vad appen hör och varför.',
+    debugIntro: 'Starta mikrofonen och spela valfri tangent. Resultatet uppdateras löpande, ton för ton.',
+    debugIdle: 'Starta mikrofonen och spela en ton.',
+    debugWaiting: 'Lyssnar … spela en ton på pianot.',
+    debugNote: 'Hörd ton',
+    debugFrequencyLabel: 'Uppmätt frekvens',
+    debugConfidenceLabel: 'Tydlighet',
+    debugLevelLabel: 'Ljudnivå (RMS)',
+    debugReason: (label: string, hz: string, pct: number, rms: string) => `Appen känner igen ${label} eftersom ljudvågen upprepar sig med ett mönster som motsvarar ${hz} Hz. En YIN-baserad periodicitetsanalys (CMNDF) hittade den bästa matchningen med ${pct}% tydlighet, och ljudnivån (RMS ${rms}) var stark nog för att lita på mätningen.`,
+    debugUnstable: (hz: string, pct: number) => `Precis nu är signalen för svag eller otydlig för en säker tonbestämning (frekvens ${hz} Hz, tydlighet bara ${pct}%).`,
     footer: <>Gjord för nyfikna öron <span>·</span> Inga fel toner här 🎵</>,
     version: (version: string) => `Version ${version}`,
     language: 'Språk',
@@ -204,6 +217,19 @@ const COPY = {
     songTarget: (n: Pitch) => `Play the next note: ${n}`,
     songCompleted: '🎉 You played the whole Twinkle Twinkle Little Star!',
     restartSong: 'Restart song',
+    debug: 'Debug',
+    debugEyebrow: 'DEBUG MODE · PITCH DETECTION',
+    debugTitle: 'See how the app hears your pitch',
+    debugLead: 'Play a note on your real piano near the microphone. There is nothing to complete — just a live look at what the app hears and why.',
+    debugIntro: 'Start the microphone and play any key. The result updates continuously, note by note.',
+    debugIdle: 'Start the microphone and play a note.',
+    debugWaiting: 'Listening … play a note on the piano.',
+    debugNote: 'Detected pitch',
+    debugFrequencyLabel: 'Measured frequency',
+    debugConfidenceLabel: 'Confidence',
+    debugLevelLabel: 'Sound level (RMS)',
+    debugReason: (label: string, hz: string, pct: number, rms: string) => `The app recognizes ${label} because the sound wave repeats in a pattern matching ${hz} Hz. A YIN-style periodicity analysis (CMNDF) found the best match with ${pct}% confidence, and the sound level (RMS ${rms}) was strong enough to trust the reading.`,
+    debugUnstable: (hz: string, pct: number) => `Right now the signal is too weak or unclear for a confident pitch reading (frequency ${hz} Hz, only ${pct}% confidence).`,
     footer: <>Made for curious ears <span>·</span> No wrong notes here 🎵</>,
     version: (version: string) => `Version ${version}`,
     language: 'Language',
@@ -307,7 +333,17 @@ async function playTone(pitch: PianoKey) {
   } catch { /* sound is a lovely extra, never a requirement */ }
 }
 
-function detectPitch(buffer: Float32Array, sampleRate: number) {
+type PitchDetection = {
+  frequency: number
+  // clarity is 1 minus the winning CMNDF value: how confidently the detector
+  // locked onto a single periodic pitch (closer to 1 is a cleaner, more
+  // certain match; lower values mean a noisier or more ambiguous signal).
+  clarity: number
+  // rms is the input signal's loudness for the analysed window.
+  rms: number
+}
+
+function detectPitch(buffer: Float32Array, sampleRate: number): PitchDetection | null {
   const bufferSize = buffer.length
 
   let rms = 0
@@ -367,6 +403,7 @@ function detectPitch(buffer: Float32Array, sampleRate: number) {
 
   // Parabolic interpolation around the winning lag for sub-sample precision.
   let refinedLag = bestLag
+  const winningValue = cmndf[bestLag]
   if (bestLag > 1 && bestLag < maxLag) {
     const s0 = cmndf[bestLag - 1]
     const s1 = cmndf[bestLag]
@@ -378,7 +415,8 @@ function detectPitch(buffer: Float32Array, sampleRate: number) {
     }
   }
 
-  return refinedLag > 0 ? sampleRate / refinedLag : null
+  if (refinedLag <= 0) return null
+  return { frequency: sampleRate / refinedLag, clarity: Math.max(0, 1 - winningValue), rms }
 }
 
 function frequencyToMidi(frequency: number) {
@@ -428,6 +466,8 @@ function App() {
   const [micStatus, setMicStatus] = useState<MicrophoneStatus>('idle')
   const [heardPitch, setHeardPitch] = useState<string | null>(null)
   const [heardCorrect, setHeardCorrect] = useState<boolean | null>(null)
+  const [debugInfo, setDebugInfo] = useState<{ label: string; frequency: number; clarity: number; rms: number } | null>(null)
+  const [debugUnstable, setDebugUnstable] = useState<{ frequency: number; clarity: number } | null>(null)
   const quizChoices = useMemo(() => [...PITCHES].sort(() => Math.random() - 0.5), [quizPitch])
   const micStatusRef = useRef(micStatus)
   const songMode = tab === 'song'
@@ -446,6 +486,7 @@ function App() {
   const expectedMidiRef = useRef(PITCH_TO_MIDI[currentPracticePitch])
   const practiceCompleteRef = useRef(practiceComplete)
   const matchedRef = useRef(false)
+  const debugModeRef = useRef(false)
 
   micStatusRef.current = micStatus
   useEffect(() => { try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ } }, [language])
@@ -454,7 +495,7 @@ function App() {
   useEffect(() => { expectedMidiRef.current = PITCH_TO_MIDI[currentPracticePitch] }, [currentPracticePitch])
   useEffect(() => { practiceCompleteRef.current = practiceComplete }, [practiceComplete])
   useEffect(() => {
-    if ((tab !== 'practice' && tab !== 'song') && (micStatus === 'listening' || micStatus === 'requesting')) {
+    if ((tab !== 'practice' && tab !== 'song' && tab !== 'debug') && (micStatus === 'listening' || micStatus === 'requesting')) {
       stopMicrophone('idle')
     }
   }, [tab, micStatus])
@@ -506,6 +547,9 @@ function App() {
     lastMidiRef.current = null
     stableFramesRef.current = 0
     matchedRef.current = false
+    debugModeRef.current = false
+    setDebugInfo(null)
+    setDebugUnstable(null)
   }
 
   const stopMicrophone = (nextStatus: MicrophoneStatus) => {
@@ -522,7 +566,7 @@ function App() {
     matchedRef.current = false
   }
 
-  const openPracticeMode = (nextTab: 'practice' | 'song') => {
+  const openPracticeMode = (nextTab: 'practice' | 'song' | 'debug') => {
     stopMicrophone('idle')
     restartPractice()
     setTab(nextTab)
@@ -547,7 +591,7 @@ function App() {
     setAnswer(null)
   }
 
-  const startMicrophone = async () => {
+  const startMicrophone = async (debugMode = false) => {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!navigator.mediaDevices?.getUserMedia || !AudioContextClass) {
       setMicStatus('unsupported')
@@ -555,10 +599,13 @@ function App() {
     }
 
     teardownMicrophone()
+    debugModeRef.current = debugMode
     const sessionId = microphoneSessionRef.current
     setMicStatus('requesting')
     setHeardPitch(null)
     setHeardCorrect(null)
+    setDebugInfo(null)
+    setDebugUnstable(null)
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -600,21 +647,27 @@ function App() {
         if (!activeAnalyser || practiceCompleteRef.current) return
 
         activeAnalyser.getFloatTimeDomainData(buffer)
-        const frequency = detectPitch(buffer, audioContext.sampleRate)
+        const detection = detectPitch(buffer, audioContext.sampleRate)
 
-        if (!frequency) {
+        if (!detection) {
           stableFramesRef.current = 0
           lastMidiRef.current = null
+          if (debugModeRef.current) {
+            setDebugInfo(null)
+            setDebugUnstable(null)
+          }
           rafRef.current = requestAnimationFrame(listen)
           return
         }
 
+        const { frequency, clarity, rms } = detection
         const midi = frequencyToMidi(frequency)
         const label = MIDI_LABELS[midi]
 
         if (!label) {
           stableFramesRef.current = 0
           lastMidiRef.current = null
+          if (debugModeRef.current) setDebugUnstable({ frequency, clarity })
           rafRef.current = requestAnimationFrame(listen)
           return
         }
@@ -627,29 +680,36 @@ function App() {
         }
 
         if (stableFramesRef.current >= 2) {
-          setHeardPitch(label)
-          const isCorrect = midi === expectedMidiRef.current
-          setHeardCorrect(isCorrect)
+          if (debugModeRef.current) {
+            setDebugUnstable(null)
+            setDebugInfo({ label, frequency, clarity, rms })
+          } else {
+            setHeardPitch(label)
+            const isCorrect = midi === expectedMidiRef.current
+            setHeardCorrect(isCorrect)
 
-          if (isCorrect && !matchedRef.current) {
-            matchedRef.current = true
-            advanceTimeoutRef.current = window.setTimeout(() => {
-              setHeardPitch(null)
-              setHeardCorrect(null)
-              const nextIndex = practiceIndexRef.current + 1
-              if (nextIndex >= activeSequence.length) {
-                practiceCompleteRef.current = true
-                setPracticeComplete(true)
-                stopMicrophone('completed')
-              } else {
-                setPracticeIndex(nextIndex)
-              }
-              lastMidiRef.current = null
-              stableFramesRef.current = 0
-              matchedRef.current = false
-              advanceTimeoutRef.current = null
-            }, 700)
+            if (isCorrect && !matchedRef.current) {
+              matchedRef.current = true
+              advanceTimeoutRef.current = window.setTimeout(() => {
+                setHeardPitch(null)
+                setHeardCorrect(null)
+                const nextIndex = practiceIndexRef.current + 1
+                if (nextIndex >= activeSequence.length) {
+                  practiceCompleteRef.current = true
+                  setPracticeComplete(true)
+                  stopMicrophone('completed')
+                } else {
+                  setPracticeIndex(nextIndex)
+                }
+                lastMidiRef.current = null
+                stableFramesRef.current = 0
+                matchedRef.current = false
+                advanceTimeoutRef.current = null
+              }, 700)
+            }
           }
+        } else if (debugModeRef.current) {
+          setDebugUnstable({ frequency, clarity })
         }
 
         rafRef.current = requestAnimationFrame(listen)
@@ -716,7 +776,7 @@ function App() {
       <div className="streak" aria-label={copy.streak(streak)}>🔥 <b>{streak}</b></div>
       <div className="language-toggle" role="group" aria-label={copy.language}><button type="button" className={language === 'sv' ? 'selected' : ''} aria-pressed={language === 'sv'} aria-label={copy.switchTo(copy.swedish)} onClick={() => setLanguage('sv')}>{copy.swedish}</button><button type="button" className={language === 'en' ? 'selected' : ''} aria-pressed={language === 'en'} aria-label={copy.switchTo(copy.english)} onClick={() => setLanguage('en')}>{copy.english}</button></div>
     </header>
-    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => openPracticeMode('practice')}>{copy.practice}</button><button className={tab === 'song' ? 'selected' : ''} onClick={() => openPracticeMode('song')}>{copy.song}</button></nav>
+    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => openPracticeMode('practice')}>{copy.practice}</button><button className={tab === 'song' ? 'selected' : ''} onClick={() => openPracticeMode('song')}>{copy.song}</button><button className={tab === 'debug' ? 'selected' : ''} onClick={() => openPracticeMode('debug')}>{copy.debug} <span>🐞</span></button></nav>
     {tab === 'learn' ? <section className="page">
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
       <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); void playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
@@ -727,6 +787,31 @@ function App() {
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
       <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer === quizPitch ? answer : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
+    </section> : tab === 'debug' ? <section className="page quiz-page">
+      <div className="intro"><p className="eyebrow">{copy.debugEyebrow}</p><h1>{copy.debugTitle}</h1><p className="lede">{copy.debugLead}</p></div>
+      <div className="quiz-card practice-card debug-card">
+        <div className="card-copy"><span className="step">🐞</span><div><h2>{copy.debugTitle}</h2><p>{copy.debugIntro}</p></div></div>
+        <div className="feedback practice-feedback debug-feedback" role="status">
+          {debugInfo ? <>
+            <strong>{copy.debugNote}:</strong> {debugInfo.label}
+            <dl className="debug-details">
+              <div><dt>{copy.debugFrequencyLabel}</dt><dd>{debugInfo.frequency.toFixed(1)} Hz</dd></div>
+              <div><dt>{copy.debugConfidenceLabel}</dt><dd>{Math.round(debugInfo.clarity * 100)}%</dd></div>
+              <div><dt>{copy.debugLevelLabel}</dt><dd>{debugInfo.rms.toFixed(3)}</dd></div>
+            </dl>
+            <small>{copy.debugReason(debugInfo.label, debugInfo.frequency.toFixed(1), Math.round(debugInfo.clarity * 100), debugInfo.rms.toFixed(3))}</small>
+          </> : micStatus === 'requesting' ? <small>{copy.microphoneWaiting}</small>
+            : micStatus === 'unsupported' ? <small>{copy.microphoneUnsupported}</small>
+              : micStatus === 'denied' ? <small>{copy.microphoneDenied}</small>
+                : micStatus === 'error' ? <small>{copy.microphoneError}</small>
+                  : debugUnstable ? <small>{copy.debugUnstable(debugUnstable.frequency.toFixed(1), Math.round(debugUnstable.clarity * 100))}</small>
+                    : micStatus === 'listening' ? <small>{copy.debugWaiting}</small>
+                      : <small>{copy.debugIdle}</small>}
+        </div>
+        <div className="practice-actions">
+          <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : () => startMicrophone(true)}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>
+        </div>
+      </div>
     </section> : <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{songMode ? copy.songLesson(practiceComplete ? SONG_SEQUENCE.length : practiceIndex + 1, SONG_SEQUENCE.length) : copy.practiceLesson(practiceComplete ? PRACTICE_SEQUENCE.length : practiceIndex + 1, PRACTICE_SEQUENCE.length)}</p><h1>{practiceTitle}</h1><p className="lede">{practiceLead}</p></div>
       <div className="quiz-card practice-card">
@@ -739,7 +824,7 @@ function App() {
           <small>{practiceFeedback}</small>
         </div>
         <div className="practice-actions">
-          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
+          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : () => startMicrophone()}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
           <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{restartLabel}</button>
         </div>
       </div>
@@ -747,5 +832,6 @@ function App() {
     <footer>{copy.footer} <span>·</span> <span>{copy.version(`v${APP_VERSION}`)}</span></footer>
   </main>
 }
+
 
 export default App
