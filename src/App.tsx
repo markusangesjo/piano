@@ -308,38 +308,77 @@ async function playTone(pitch: PianoKey) {
 }
 
 function detectPitch(buffer: Float32Array, sampleRate: number) {
+  const bufferSize = buffer.length
+
   let rms = 0
-  for (let i = 0; i < buffer.length; i += 1) rms += buffer[i] * buffer[i]
-  rms = Math.sqrt(rms / buffer.length)
-  if (rms < 0.015) return null
+  for (let i = 0; i < bufferSize; i += 1) rms += buffer[i] * buffer[i]
+  rms = Math.sqrt(rms / bufferSize)
+  if (rms < 0.01) return null
 
-  const minLag = Math.floor(sampleRate / 550)
-  const maxLag = Math.floor(sampleRate / 250)
-  let bestLag = -1
-  let bestCorrelation = 0
+  // A YIN-style detector (difference function + cumulative mean normalization)
+  // tracks the true fundamental far more reliably than plain autocorrelation,
+  // which tends to lock onto strong harmonics of real piano notes (an issue
+  // most noticeable from G4 upward where those overtones sit inside range).
+  const minFrequency = 220 // margin below C4
+  const maxFrequency = 660 // margin above C5
+  const maxLag = Math.min(Math.floor(sampleRate / minFrequency), bufferSize - 1)
+  const minLag = Math.max(2, Math.floor(sampleRate / maxFrequency))
+  if (maxLag <= minLag) return null
 
-  for (let lag = minLag; lag <= maxLag; lag += 1) {
-    let correlation = 0
-    let normA = 0
-    let normB = 0
-
-    for (let i = 0; i < buffer.length - lag; i += 1) {
-      const a = buffer[i]
-      const b = buffer[i + lag]
-      correlation += a * b
-      normA += a * a
-      normB += b * b
+  const difference = new Float32Array(maxLag + 1)
+  for (let lag = 1; lag <= maxLag; lag += 1) {
+    let sum = 0
+    const limit = bufferSize - lag
+    for (let i = 0; i < limit; i += 1) {
+      const delta = buffer[i] - buffer[i + lag]
+      sum += delta * delta
     }
+    difference[lag] = sum
+  }
 
-    if (!normA || !normB) continue
-    const normalized = correlation / Math.sqrt(normA * normB)
-    if (normalized > bestCorrelation) {
-      bestCorrelation = normalized
+  const cmndf = new Float32Array(maxLag + 1)
+  cmndf[0] = 1
+  let runningSum = 0
+  for (let lag = 1; lag <= maxLag; lag += 1) {
+    runningSum += difference[lag]
+    cmndf[lag] = runningSum === 0 ? 1 : (difference[lag] * lag) / runningSum
+  }
+
+  const threshold = 0.2
+  let bestLag = -1
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
+    if (cmndf[lag] < threshold) {
+      while (lag + 1 <= maxLag && cmndf[lag + 1] < cmndf[lag]) lag += 1
       bestLag = lag
+      break
     }
   }
 
-  return bestLag > 0 && bestCorrelation > 0.85 ? sampleRate / bestLag : null
+  if (bestLag === -1) {
+    let bestValue = Infinity
+    for (let lag = minLag; lag <= maxLag; lag += 1) {
+      if (cmndf[lag] < bestValue) {
+        bestValue = cmndf[lag]
+        bestLag = lag
+      }
+    }
+    if (bestLag === -1 || bestValue > 0.35) return null
+  }
+
+  // Parabolic interpolation around the winning lag for sub-sample precision.
+  let refinedLag = bestLag
+  if (bestLag > 1 && bestLag < maxLag) {
+    const s0 = cmndf[bestLag - 1]
+    const s1 = cmndf[bestLag]
+    const s2 = cmndf[bestLag + 1]
+    const denominator = s0 - 2 * s1 + s2
+    if (denominator !== 0) {
+      const delta = (s0 - s2) / (2 * denominator)
+      if (delta > -1 && delta < 1) refinedLag = bestLag + delta
+    }
+  }
+
+  return refinedLag > 0 ? sampleRate / refinedLag : null
 }
 
 function frequencyToMidi(frequency: number) {
@@ -536,7 +575,9 @@ function App() {
       const audioContext = new AudioContextClass()
       if (audioContext.state === 'suspended') await audioContext.resume()
       const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 2048
+      // A smaller window shortens how long a new note has to sound before it
+      // dominates the analysis buffer, which noticeably cuts detection latency.
+      analyser.fftSize = 1024
       analyser.smoothingTimeConstant = 0.2
 
       const source = audioContext.createMediaStreamSource(stream)
