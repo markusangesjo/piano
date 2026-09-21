@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import App, { BLACK_KEYS, PITCHES, PITCH_INFO, resetAudioState } from './App'
+import App from './App'
+import { resetAudioState } from './audio'
+import { BLACK_KEYS, PITCHES, PITCH_INFO } from './pitch'
 import { afterEach, vi } from 'vitest'
 
 afterEach(() => {
@@ -26,6 +28,62 @@ describe('Note Nest lesson', () => {
     else Reflect.deleteProperty(window, 'webkitAudioContext')
   })
 
+  /**
+   * Stubs the Web Audio + getUserMedia surface the microphone hook needs.
+   * Pass driveFrames to capture animation frames so a test can decide when the
+   * detection loop runs; `frequency()` is re-read on every frame.
+   */
+  const stubMicrophone = (options: { frequency?: () => number; driveFrames?: boolean } = {}) => {
+    const { frequency = () => 261.63, driveFrames = false } = options
+    let rafCallback: FrameRequestCallback | null = null
+
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      if (driveFrames) rafCallback = callback
+      return 1
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+      rafCallback = null
+    })
+    vi.stubGlobal('AudioContext', class {
+      state = 'running'
+      resume() {
+        return Promise.resolve()
+      }
+      sampleRate = 44100
+      createAnalyser() {
+        return {
+          fftSize: 2048,
+          smoothingTimeConstant: 0,
+          getFloatTimeDomainData(data: Float32Array) {
+            const heardFrequency = frequency()
+            for (let i = 0; i < data.length; i += 1) data[i] = Math.sin((2 * Math.PI * heardFrequency * i) / 44100) * 0.4
+          },
+        }
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn() }
+      }
+      close() {
+        return Promise.resolve()
+      }
+    })
+
+    const trackStop = vi.fn()
+    const getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [{ stop: trackStop }] })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } })
+
+    const runFrames = (count: number) => {
+      for (let i = 0; i < count; i += 1) {
+        const callback = rafCallback
+        if (!callback) break
+        rafCallback = null
+        callback(0)
+      }
+    }
+
+    return { runFrames, getUserMedia, trackStop }
+  }
+
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
     render(<App />)
     expect(screen.getByRole('heading', { name: /möt dina tonvänner/i })).toBeInTheDocument()
@@ -33,6 +91,7 @@ describe('Note Nest lesson', () => {
     expect(screen.getByRole('button', { name: 'Välj tonen G4' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Språk' })).toBeInTheDocument()
     expect(screen.getByText('Version v0.1.0')).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('sv')
   })
 
   it('switches to English and persists the selection', async () => {
@@ -42,6 +101,7 @@ describe('Note Nest lesson', () => {
     expect(screen.getByRole('heading', { name: /meet your pitch friends/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play C4, middle C' })).toBeInTheDocument()
     expect(window.localStorage.getItem('note-nest-language')).toBe('en')
+    expect(document.documentElement.lang).toBe('en')
   })
 
   it('moves to the quiz and advances after a correct answer', async () => {
@@ -62,6 +122,18 @@ describe('Note Nest lesson', () => {
     await user.click(screen.getByRole('button', { name: 'Spela A4' }))
     expect(screen.getByRole('status')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Spela E4' })).not.toHaveClass('active')
+  })
+
+  it('keeps the same note when the learner wants to try again', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
+    await user.click(screen.getByRole('button', { name: 'Spela A4' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Du tryckte på A4')
+
+    await user.click(screen.getByRole('button', { name: /försök igen/i }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Diskantklav med tonen E4' })).toBeInTheDocument()
   })
 
   it('uses the treble staff positions and labels the C4 ledger line as middle C', async () => {
@@ -293,35 +365,7 @@ describe('Note Nest lesson', () => {
       configurable: true,
       value: { request: requestWakeLock },
     })
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
-    vi.stubGlobal('AudioContext', class {
-      state = 'running'
-      resume() {
-        return Promise.resolve()
-      }
-      sampleRate = 44100
-      createAnalyser() {
-        return {
-          fftSize: 2048,
-          smoothingTimeConstant: 0,
-          getFloatTimeDomainData: vi.fn(),
-        }
-      }
-      createMediaStreamSource() {
-        return { connect: vi.fn() }
-      }
-      close() {
-        return Promise.resolve()
-      }
-    })
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: {
-        getUserMedia: vi.fn().mockResolvedValue({
-          getTracks: () => [{ stop: vi.fn() }],
-        }),
-      },
-    })
+    stubMicrophone()
 
     render(<App />)
     await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
@@ -338,33 +382,7 @@ describe('Note Nest lesson', () => {
 
   it('starts microphone practice automatically when permission is already granted', async () => {
     const user = userEvent.setup()
-    vi.stubGlobal('AudioContext', class {
-      state = 'running'
-      resume() {
-        return Promise.resolve()
-      }
-      sampleRate = 44100
-      createAnalyser() {
-        return {
-          fftSize: 2048,
-          smoothingTimeConstant: 0,
-          getFloatTimeDomainData: vi.fn(),
-        }
-      }
-      createMediaStreamSource() {
-        return { connect: vi.fn() }
-      }
-      close() {
-        return Promise.resolve()
-      }
-    })
-    const getUserMedia = vi.fn().mockResolvedValue({
-      getTracks: () => [{ stop: vi.fn() }],
-    })
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    })
+    const { getUserMedia } = stubMicrophone()
     Object.defineProperty(navigator, 'permissions', {
       configurable: true,
       value: { query: vi.fn().mockResolvedValue({ state: 'granted' }) },
@@ -384,55 +402,7 @@ describe('Note Nest lesson', () => {
     vi.useFakeTimers()
 
     let currentFrequency = 261.63
-    const trackStop = vi.fn()
-    let rafCallback: FrameRequestCallback | null = null
-
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      rafCallback = callback
-      return 1
-    })
-    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
-      rafCallback = null
-    })
-    vi.stubGlobal('AudioContext', class {
-      state = 'running'
-      resume() {
-        return Promise.resolve()
-      }
-      sampleRate = 44100
-      createAnalyser() {
-        return {
-          fftSize: 2048,
-          smoothingTimeConstant: 0,
-          getFloatTimeDomainData(data: Float32Array) {
-            for (let i = 0; i < data.length; i += 1) data[i] = Math.sin((2 * Math.PI * currentFrequency * i) / 44100) * 0.4
-          },
-        }
-      }
-      createMediaStreamSource() {
-        return { connect: vi.fn() }
-      }
-      close() {
-        return Promise.resolve()
-      }
-    })
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: {
-        getUserMedia: vi.fn().mockResolvedValue({
-          getTracks: () => [{ stop: trackStop }],
-        }),
-      },
-    })
-
-    const runFrames = (count: number) => {
-      for (let i = 0; i < count; i += 1) {
-        const callback = rafCallback
-        if (!callback) break
-        rafCallback = null
-        callback(0)
-      }
-    }
+    const { runFrames, trackStop } = stubMicrophone({ frequency: () => currentFrequency, driveFrames: true })
 
     render(<App />)
     await act(async () => {
@@ -461,5 +431,51 @@ describe('Note Nest lesson', () => {
     expect(screen.getByText('🎉 Du klarade hela mikrofonövningen!')).toBeInTheDocument()
     expect(trackStop).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Stoppa mikrofon' })).not.toBeInTheDocument()
+  }, 10000)
+
+  it('plays the whole Für Elise song, including the low B3 and A3 notes', async () => {
+    vi.useFakeTimers()
+
+    let currentFrequency = 329.63
+    const { runFrames } = stubMicrophone({ frequency: () => currentFrequency, driveFrames: true })
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: vi.fn().mockResolvedValue({ state: 'denied' }) },
+    })
+
+    render(<App />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Låtar' }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Für Elise (första delen)' }))
+      await Promise.resolve()
+    })
+
+    const chips = [...screen.getByLabelText('Spela Für Elise (första delen)').querySelectorAll('.song-sequence span')]
+    expect(chips.map((chip) => chip.textContent)).toEqual(['E', 'D#', 'E', 'D#', 'E', 'B', 'D', 'C', 'A'])
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
+      await Promise.resolve()
+    })
+
+    const frequencies = [329.63, 311.13, 329.63, 311.13, 329.63, 246.94, 293.66, 261.63, 220]
+    const nextTargets = ['D#4', 'E4', 'D#4', 'E4', 'B3', 'D4', 'C4', 'A3']
+
+    for (let i = 0; i < frequencies.length; i += 1) {
+      currentFrequency = frequencies[i]
+      await act(async () => {
+        runFrames(3)
+        await vi.advanceTimersByTimeAsync(700)
+        runFrames(1)
+      })
+      if (i < nextTargets.length) {
+        expect(screen.getByText(`Spela nästa ton: ${nextTargets[i]}`)).toBeInTheDocument()
+      }
+    }
+
+    expect(screen.getByText('🎉 Du spelade hela Für Elise (första delen)!')).toBeInTheDocument()
   }, 10000)
 })

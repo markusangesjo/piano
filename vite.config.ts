@@ -36,31 +36,11 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
+          // The app self-hosts its fonts (see the @font-face rules in
+          // src/styles.css), so woff2 files belong in the precache too — that is
+          // what makes the very first offline launch render with the real fonts.
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
           navigateFallback: `${basePath}index.html`,
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'google-font-stylesheets',
-              },
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-font-webfonts',
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-                expiration: {
-                  maxEntries: 4,
-                  maxAgeSeconds: 60 * 60 * 24 * 365,
-                },
-              },
-            },
-          ],
         },
         devOptions: {
           enabled: false,
