@@ -327,12 +327,13 @@ function App() {
     matchedRef.current = false
   }
 
-  const stopMicrophone = (nextStatus: MicrophoneStatus = 'idle') => {
+  const stopMicrophone = (nextStatus: MicrophoneStatus = practiceCompleteRef.current ? 'completed' : 'idle') => {
     teardownMicrophone()
     setMicStatus(nextStatus)
   }
 
   const restartPractice = () => {
+    practiceCompleteRef.current = false
     setPracticeIndex(0)
     setPracticeComplete(false)
     setHeardPitch(null)
@@ -444,8 +445,9 @@ function App() {
               setHeardCorrect(null)
               const nextIndex = practiceIndexRef.current + 1
               if (nextIndex >= PRACTICE_SEQUENCE.length) {
+                practiceCompleteRef.current = true
                 setPracticeComplete(true)
-                stopMicrophone('completed')
+                stopMicrophone()
               } else {
                 setPracticeIndex(nextIndex)
               }
