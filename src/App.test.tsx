@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
 
@@ -65,7 +65,7 @@ describe('Note Nest lesson', () => {
     await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
     expect(screen.getByText('Quizet använder bara vita tangenter (C4–C5).')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Spela C♯4 / D♭4' })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /^Spela /i })).toHaveLength(PITCHES.length)
+    expect(within(screen.getByLabelText('Pianoklaviatur från C4 till C5')).getAllByRole('button')).toHaveLength(PITCHES.length)
   })
 
   it('does not reveal the quiz answer before selection and highlights feedback afterward', async () => {
@@ -85,7 +85,7 @@ describe('Note Nest lesson', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
-    expect(screen.getByRole('heading', { name: /lyssna på ditt riktiga piano/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: /lyssna på ditt riktiga piano/i })).toBeInTheDocument()
     expect(screen.getByText('Starta mikrofonen och spela tonen nära enheten.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
     expect(screen.getByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toBeInTheDocument()
