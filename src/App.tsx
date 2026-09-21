@@ -282,12 +282,14 @@ function App() {
   const advanceTimeoutRef = useRef<number | null>(null)
   const lastMidiRef = useRef<number | null>(null)
   const stableFramesRef = useRef(0)
+  const practiceIndexRef = useRef(practiceIndex)
   const expectedMidiRef = useRef(PITCH_TO_MIDI[currentPracticePitch])
   const practiceCompleteRef = useRef(practiceComplete)
   const matchedRef = useRef(false)
 
   useEffect(() => { try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ } }, [language])
   useEffect(() => { setAnswer(null) }, [quizPitch])
+  useEffect(() => { practiceIndexRef.current = practiceIndex }, [practiceIndex])
   useEffect(() => { expectedMidiRef.current = PITCH_TO_MIDI[currentPracticePitch] }, [currentPracticePitch])
   useEffect(() => { practiceCompleteRef.current = practiceComplete }, [practiceComplete])
   useEffect(() => {
@@ -369,9 +371,9 @@ function App() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
       })
       const audioContext = new AudioContextClass()
@@ -429,14 +431,13 @@ function App() {
             advanceTimeoutRef.current = window.setTimeout(() => {
               setHeardPitch(null)
               setHeardCorrect(null)
-              setPracticeIndex((current) => {
-                if (current >= PRACTICE_SEQUENCE.length - 1) {
-                  setPracticeComplete(true)
-                  stopMicrophone()
-                  return current
-                }
-                return current + 1
-              })
+              const nextIndex = practiceIndexRef.current + 1
+              if (nextIndex >= PRACTICE_SEQUENCE.length) {
+                setPracticeComplete(true)
+                stopMicrophone()
+              } else {
+                setPracticeIndex(nextIndex)
+              }
               lastMidiRef.current = null
               stableFramesRef.current = 0
               matchedRef.current = false

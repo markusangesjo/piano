@@ -1,6 +1,12 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
+import { afterEach, vi } from 'vitest'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 describe('Note Nest lesson', () => {
   beforeEach(() => {
@@ -89,5 +95,62 @@ describe('Note Nest lesson', () => {
     expect(screen.getByText('Starta mikrofonen och spela tonen nära enheten.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
     expect(screen.getByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toBeInTheDocument()
+  })
+
+  it('shows a helpful message when microphone permission is denied', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('AudioContext', class {})
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockRejectedValue(new DOMException('Denied', 'NotAllowedError')),
+      },
+    })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
+    await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Mikrofonbehörighet nekades. Tillåt mikrofonen och försök igen.')).toBeInTheDocument()
+    })
+  })
+
+  it('shows the listening state after microphone access starts', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
+    vi.stubGlobal('AudioContext', class {
+      sampleRate = 44100
+      createAnalyser() {
+        return {
+          fftSize: 2048,
+          smoothingTimeConstant: 0,
+          getFloatTimeDomainData: vi.fn(),
+        }
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn() }
+      }
+      close() {
+        return Promise.resolve()
+      }
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: vi.fn() }],
+        }),
+      },
+    })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
+    await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Mikrofonen lyssnar. Spela tonen på ditt piano.')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Stoppa mikrofon' })).toBeInTheDocument()
   })
 })
