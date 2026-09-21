@@ -32,7 +32,7 @@ describe('Note Nest lesson', () => {
     expect(screen.getByRole('button', { name: 'Spela C4, mitt-C' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Välj tonen G4' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Språk' })).toBeInTheDocument()
-    expect(screen.getByText('Version 0.1.0')).toBeInTheDocument()
+    expect(screen.getByText('Version v0.1.0')).toBeInTheDocument()
   })
 
   it('switches to English and persists the selection', async () => {
