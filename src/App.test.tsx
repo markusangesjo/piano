@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
 import { afterEach, vi } from 'vitest'
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -94,7 +95,7 @@ describe('Note Nest lesson', () => {
     expect(screen.getByRole('heading', { level: 1, name: /lyssna på ditt riktiga piano/i })).toBeInTheDocument()
     expect(screen.getByText('Starta mikrofonen och spela tonen nära enheten.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
-    expect(screen.getByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toBeInTheDocument()
+    expect(screen.getAllByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toHaveLength(2)
   })
 
   it('shows a helpful message when microphone permission is denied', async () => {
@@ -112,8 +113,9 @@ describe('Note Nest lesson', () => {
     await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Mikrofonbehörighet nekades. Tillåt mikrofonen och försök igen.')).toBeInTheDocument()
+      expect(screen.getAllByText('Mikrofonbehörighet nekades. Tillåt mikrofonen och försök igen.')).toHaveLength(2)
     })
+    expect(screen.queryByText('Ingen stabil ton ännu')).not.toBeInTheDocument()
   })
 
   it('shows the listening state after microphone access starts', async () => {
@@ -153,4 +155,84 @@ describe('Note Nest lesson', () => {
     })
     expect(screen.getByRole('button', { name: 'Stoppa mikrofon' })).toBeInTheDocument()
   })
+
+  it('advances through microphone practice and finishes after the last correct pitch', async () => {
+    vi.useFakeTimers()
+
+    let currentFrequency = 261.63
+    const trackStop = vi.fn()
+    let rafCallback: FrameRequestCallback | null = null
+
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      rafCallback = callback
+      return 1
+    })
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {
+      rafCallback = null
+    })
+    vi.stubGlobal('AudioContext', class {
+      sampleRate = 44100
+      createAnalyser() {
+        return {
+          fftSize: 2048,
+          smoothingTimeConstant: 0,
+          getFloatTimeDomainData(data: Float32Array) {
+            for (let i = 0; i < data.length; i += 1) data[i] = Math.sin((2 * Math.PI * currentFrequency * i) / 44100) * 0.4
+          },
+        }
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn() }
+      }
+      close() {
+        return Promise.resolve()
+      }
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({
+          getTracks: () => [{ stop: trackStop }],
+        }),
+      },
+    })
+
+    const runFrames = (count: number) => {
+      for (let i = 0; i < count; i += 1) {
+        const callback = rafCallback
+        if (!callback) break
+        rafCallback = null
+        callback(0)
+      }
+    }
+
+    render(<App />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
+      await Promise.resolve()
+    })
+
+    const frequencies = [261.63, 293.66, 329.63, 349.23, 392, 440, 493.88, 523.25]
+    const expectedTargets = ['Spela D4 på ditt riktiga piano', 'Spela E4 på ditt riktiga piano', 'Spela F4 på ditt riktiga piano', 'Spela G4 på ditt riktiga piano', 'Spela A4 på ditt riktiga piano', 'Spela B4 på ditt riktiga piano', 'Spela C5 på ditt riktiga piano']
+
+    for (let i = 0; i < frequencies.length; i += 1) {
+      currentFrequency = frequencies[i]
+      await act(async () => {
+        runFrames(3)
+        await vi.advanceTimersByTimeAsync(700)
+        runFrames(1)
+      })
+      if (i < expectedTargets.length) {
+        expect(screen.getByText(expectedTargets[i])).toBeInTheDocument()
+      }
+    }
+
+    expect(screen.getByText('🎉 Du klarade hela mikrofonövningen!')).toBeInTheDocument()
+    expect(trackStop).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Stoppa mikrofon' })).not.toBeInTheDocument()
+  }, 10000)
 })

@@ -204,28 +204,32 @@ function detectPitch(buffer: Float32Array, sampleRate: number) {
   rms = Math.sqrt(rms / buffer.length)
   if (rms < 0.015) return null
 
-  let bestOffset = -1
+  const minLag = Math.floor(sampleRate / 550)
+  const maxLag = Math.floor(sampleRate / 250)
+  let bestLag = -1
   let bestCorrelation = 0
-  let foundGoodCorrelation = false
-  const correlations = new Array<number>(buffer.length).fill(0)
 
-  for (let offset = 8; offset < buffer.length / 2; offset += 1) {
+  for (let lag = minLag; lag <= maxLag; lag += 1) {
     let correlation = 0
-    for (let i = 0; i < buffer.length / 2; i += 1) correlation += Math.abs(buffer[i] - buffer[i + offset])
-    correlation = 1 - correlation / (buffer.length / 2)
-    correlations[offset] = correlation
+    let normA = 0
+    let normB = 0
 
-    if (correlation > 0.9 && correlation > bestCorrelation) {
-      foundGoodCorrelation = true
-      bestCorrelation = correlation
-      bestOffset = offset
-    } else if (foundGoodCorrelation) {
-      const shift = (correlations[bestOffset + 1] - correlations[bestOffset - 1]) / correlations[bestOffset]
-      return sampleRate / (bestOffset + (8 * shift))
+    for (let i = 0; i < buffer.length - lag; i += 1) {
+      const a = buffer[i]
+      const b = buffer[i + lag]
+      correlation += a * b
+      normA += a * a
+      normB += b * b
+    }
+
+    const normalized = correlation / Math.sqrt(normA * normB)
+    if (normalized > bestCorrelation) {
+      bestCorrelation = normalized
+      bestLag = lag
     }
   }
 
-  return bestCorrelation > 0.92 && bestOffset > 0 ? sampleRate / bestOffset : null
+  return bestLag > 0 && bestCorrelation > 0.85 ? sampleRate / bestLag : null
 }
 
 function frequencyToMidi(frequency: number) {
@@ -282,6 +286,7 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const advanceTimeoutRef = useRef<number | null>(null)
+  const microphoneSessionRef = useRef(0)
   const lastMidiRef = useRef<number | null>(null)
   const stableFramesRef = useRef(0)
   const practiceIndexRef = useRef(practiceIndex)
@@ -295,15 +300,8 @@ function App() {
   useEffect(() => { expectedMidiRef.current = PITCH_TO_MIDI[currentPracticePitch] }, [currentPracticePitch])
   useEffect(() => { practiceCompleteRef.current = practiceComplete }, [practiceComplete])
   useEffect(() => {
-    if (tab !== 'practice' && micStatus === 'listening') {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current)
-      if (advanceTimeoutRef.current) window.clearTimeout(advanceTimeoutRef.current)
-      streamRef.current?.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-      analyserRef.current = null
-      if (audioContextRef.current) void audioContextRef.current.close()
-      audioContextRef.current = null
-      setMicStatus('idle')
+    if (tab !== 'practice' && (micStatus === 'listening' || micStatus === 'requesting')) {
+      stopMicrophone()
     }
   }, [tab, micStatus])
   useEffect(() => () => {
@@ -314,6 +312,7 @@ function App() {
   }, [])
 
   const teardownMicrophone = () => {
+    microphoneSessionRef.current += 1
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     rafRef.current = null
     if (advanceTimeoutRef.current) window.clearTimeout(advanceTimeoutRef.current)
@@ -366,6 +365,7 @@ function App() {
     }
 
     teardownMicrophone()
+    const sessionId = microphoneSessionRef.current
     setMicStatus('requesting')
     setHeardPitch(null)
     setHeardCorrect(null)
@@ -378,6 +378,10 @@ function App() {
           autoGainControl: false,
         },
       })
+      if (sessionId !== microphoneSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       const audioContext = new AudioContextClass()
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 2048
@@ -385,6 +389,11 @@ function App() {
 
       const source = audioContext.createMediaStreamSource(stream)
       source.connect(analyser)
+      if (sessionId !== microphoneSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        void audioContext.close()
+        return
+      }
 
       streamRef.current = stream
       audioContextRef.current = audioContext
@@ -453,7 +462,9 @@ function App() {
 
       rafRef.current = requestAnimationFrame(listen)
     } catch (error) {
+      const shouldReportFailure = sessionId === microphoneSessionRef.current
       teardownMicrophone()
+      if (!shouldReportFailure) return
       if (error instanceof DOMException && (error.name === 'NotAllowedError' || error.name === 'SecurityError')) {
         setMicStatus('denied')
       } else {
@@ -476,11 +487,25 @@ function App() {
             ? copy.microphoneCompleted
             : copy.microphoneIdle
 
-  const practiceFeedback = heardCorrect === true
-    ? copy.detectedCorrect
-    : heardCorrect === false
-      ? copy.detectedWrong
-      : copy.detectedNone
+  const heardPitchLabel = micStatus === 'unsupported' || micStatus === 'denied' || micStatus === 'error' || micStatus === 'requesting' || micStatus === 'completed'
+    ? '—'
+    : heardPitch ?? copy.detectedNone
+
+  const practiceFeedback = micStatus === 'requesting'
+    ? copy.microphoneWaiting
+    : micStatus === 'unsupported'
+      ? copy.microphoneUnsupported
+      : micStatus === 'denied'
+        ? copy.microphoneDenied
+        : micStatus === 'error'
+          ? copy.microphoneError
+          : micStatus === 'completed'
+            ? copy.microphoneCompleted
+            : heardCorrect === true
+              ? copy.detectedCorrect
+              : heardCorrect === false
+                ? copy.detectedWrong
+                : copy.detectedNone
 
   return <main>
     <header className="topbar">
@@ -507,7 +532,7 @@ function App() {
         {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} /><div className="practice-target"><strong>{copy.target(currentPracticePitch)}</strong><span>{microphoneMessage}</span></div></>}
         {practiceComplete && <div className="practice-complete" role="status">{copy.completed}</div>}
         <div className={`feedback practice-feedback ${heardCorrect === true ? 'correct' : heardCorrect === false ? 'oops' : ''}`} role="status">
-          <strong>{copy.detected}:</strong> {heardPitch ?? copy.detectedNone}
+          <strong>{copy.detected}:</strong> {heardPitchLabel}
           <small>{practiceFeedback}</small>
         </div>
         <div className="practice-actions">
