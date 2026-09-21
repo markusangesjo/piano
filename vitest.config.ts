@@ -1,15 +1,8 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      injectRegister: false,
-      devOptions: { enabled: false },
-    }),
-  ],
+  plugins: [react()],
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
