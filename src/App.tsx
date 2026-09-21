@@ -37,6 +37,7 @@ type AudioContextWindow = typeof window & { webkitAudioContext?: BrowserAudioCon
 
 let audioContext: AudioContext | null = null
 let masterOutput: GainNode | null = null
+let masterOutputContext: AudioContext | null = null
 let closingAudioContext: AudioContext | null = null
 let closingAudioContextPromise: Promise<void> | null = null
 
@@ -86,7 +87,7 @@ function getAudioContext() {
 }
 
 function getMasterOutput(context: AudioContext) {
-  if (masterOutput) return masterOutput
+  if (masterOutput && masterOutputContext === context) return masterOutput
 
   const compressor = context.createDynamicsCompressor()
   compressor.threshold.value = -18
@@ -100,6 +101,7 @@ function getMasterOutput(context: AudioContext) {
 
   compressor.connect(gain).connect(context.destination)
   masterOutput = gain
+  masterOutputContext = context
   return masterOutput
 }
 
@@ -107,6 +109,7 @@ export async function resetAudioState() {
   const context = audioContext
   audioContext = null
   masterOutput = null
+  masterOutputContext = null
   if (!context || context.state === 'closed') return
   if (closingAudioContext === context && closingAudioContextPromise) {
     await closingAudioContextPromise
