@@ -37,6 +37,8 @@ type AudioContextWindow = typeof window & { webkitAudioContext?: BrowserAudioCon
 
 let audioContext: AudioContext | null = null
 let masterOutput: GainNode | null = null
+let closingAudioContext: AudioContext | null = null
+let closingAudioContextPromise: Promise<void> | null = null
 
 const COPY = {
   sv: {
@@ -105,7 +107,20 @@ export async function resetAudioState() {
   const context = audioContext
   audioContext = null
   masterOutput = null
-  if (context && context.state !== 'closed') await context.close()
+  if (!context || context.state === 'closed') return
+  if (closingAudioContext === context && closingAudioContextPromise) {
+    await closingAudioContextPromise
+    return
+  }
+
+  closingAudioContext = context
+  closingAudioContextPromise = context.close().finally(() => {
+    if (closingAudioContext === context) {
+      closingAudioContext = null
+      closingAudioContextPromise = null
+    }
+  })
+  await closingAudioContextPromise
 }
 
 async function playTone(pitch: PianoKey) {
