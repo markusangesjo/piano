@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { playTone } from './audio'
+import { Icon } from './components/Icon'
 import { Piano } from './components/Piano'
 import { Staff } from './components/Staff'
 import { COPY } from './copy'
@@ -51,7 +52,6 @@ function App() {
     try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ }
     document.documentElement.lang = language
   }, [language])
-  useEffect(() => { setAnswer(null) }, [quizPitch])
 
   // The listening loop lives in its own hook; App only decides which pitch the
   // learner has to play and what happens once that note has been matched.
@@ -120,6 +120,8 @@ function App() {
     }
   }
 
+  // Clearing the feedback belongs to the question change itself rather than to
+  // an effect on quizPitch, which would only schedule a second render.
   const nextQuestion = () => {
     setQuizPitch(pickNextQuizPitch(quizPitch))
     setAnswer(null)
@@ -200,29 +202,29 @@ function App() {
 
   return <main>
     <header className="topbar">
-      <a className="brand" href="#" aria-label={copy.home}><span className="brand-mark">♫</span><span>note nest</span></a>
-      <div className="progress" aria-label={copy.progress}><span className="progress-dot filled" /><span className="progress-line" /><span className="progress-dot" /><span className="progress-line" /><span className="progress-dot" /></div>
-      <div className="streak" aria-label={copy.streak(streak)}>🔥 <b>{streak}</b></div>
+      <a className="brand" href="#" aria-label={copy.home}><span className="brand-mark"><Icon name="note" /></span><span>note nest</span></a>
+      <div className="progress" role="img" aria-label={copy.progress}><span className="progress-dot filled" /><span className="progress-line" /><span className="progress-dot" /><span className="progress-line" /><span className="progress-dot" /></div>
+      <div className="streak" aria-label={copy.streak(streak)}><Icon name="flame" /><b>{streak}</b></div>
       <div className="language-toggle" role="group" aria-label={copy.language}><button type="button" className={language === 'sv' ? 'selected' : ''} aria-pressed={language === 'sv'} aria-label={copy.switchTo(copy.swedish)} onClick={() => setLanguage('sv')}>{copy.swedish}</button><button type="button" className={language === 'en' ? 'selected' : ''} aria-pressed={language === 'en'} aria-label={copy.switchTo(copy.english)} onClick={() => setLanguage('en')}>{copy.english}</button></div>
     </header>
-    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => openPracticeMode('practice')}>{copy.practice}</button><button className={tab === 'song' ? 'selected' : ''} onClick={() => openPracticeMode('song')}>{copy.song}</button><button className={tab === 'debug' ? 'selected' : ''} onClick={() => openPracticeMode('debug')}>{copy.debug} <span>🐞</span></button></nav>
+    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} aria-current={tab === 'learn' ? 'true' : undefined} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} aria-current={tab === 'quiz' ? 'true' : undefined} onClick={() => setTab('quiz')}>{copy.quiz} <span><Icon name="sparkle" /></span></button><button className={tab === 'practice' ? 'selected' : ''} aria-current={tab === 'practice' ? 'true' : undefined} onClick={() => openPracticeMode('practice')}>{copy.practice}</button><button className={tab === 'song' ? 'selected' : ''} aria-current={tab === 'song' ? 'true' : undefined} onClick={() => openPracticeMode('song')}>{copy.song}</button><button className={tab === 'debug' ? 'selected' : ''} aria-current={tab === 'debug' ? 'true' : undefined} onClick={() => openPracticeMode('debug')}>{copy.debug} <span><Icon name="bug" /></span></button></nav>
     {tab === 'learn' ? <section className="page">
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
       <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); void playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
       <div className="lesson-card staff-card"><div className="card-copy"><span className="step">2</span><div><h2>{copy.spot}</h2><p>{copy.map}</p></div></div><Staff pitch={pitch} copy={copy} /><div className="note-caption" style={{ '--note-color': PITCH_INFO[pitch].color } as React.CSSProperties}><span className="caption-dot" />{copy.thisNote(pitch)}</div></div>
       <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={selectedKey} onPick={(key) => { setSelectedKey(key); if (isWhiteKey(key)) setPitch(key) }} copy={copy} /></div>
-      <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
+      <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span><Icon name="arrow" /></span></button>
     </section> : tab === 'quiz' ? <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
       {/* The quiz never highlights a key — not even the one that was tapped —
           so the learner has to read the note on the staff instead. The
           keyboard still shows the black keys, so it looks like a real piano. */}
       <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={null} onPick={chooseAnswer} copy={copy} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{isWhiteKey(answer) ? copy.almost(answer) : copy.blackKeyAttempt(pianoKeyLabel(answer))}</div>}</div>
-      {answer && <button className="primary" onClick={retryQuestion}>{copy.another} <span>→</span></button>}
+      {answer && <button className="primary" onClick={retryQuestion}>{copy.another} <span><Icon name="arrow" /></span></button>}
     </section> : tab === 'debug' ? <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.debugEyebrow}</p><h1>{copy.debugTitle}</h1><p className="lede">{copy.debugLead}</p></div>
       <div className="quiz-card practice-card debug-card">
-        <div className="card-copy"><span className="step">🐞</span><div><h2>{copy.debugTitle}</h2><p>{copy.debugIntro}</p></div></div>
+        <div className="card-copy"><span className="step"><Icon name="bug" /></span><div><h2>{copy.debugTitle}</h2><p>{copy.debugIntro}</p></div></div>
         <div className="feedback practice-feedback debug-feedback" role="status">
           {debugInfo ? <>
             <strong>{copy.debugNote}:</strong> {debugInfo.label}
@@ -251,7 +253,7 @@ function App() {
       </> : <>
         <div className="intro"><p className="eyebrow">{songMode ? copy.songLesson(songTitleText, practiceComplete ? activeSequence.length : practiceIndex + 1, activeSequence.length) : copy.practiceLesson(practiceComplete ? activeSequence.length : practiceIndex + 1, activeSequence.length)}</p><h1>{practiceTitle}</h1><p className="lede">{practiceLead}</p></div>
         <div className="quiz-card practice-card">
-          <div className="card-copy"><span className="step">{songMode ? '♫' : '🎙'}</span><div><h2>{practiceTitle}</h2><p>{practiceIntro}</p></div></div>
+          <div className="card-copy"><span className="step"><Icon name={songMode ? 'note' : 'mic'} /></span><div><h2>{practiceTitle}</h2><p>{practiceIntro}</p></div></div>
           {songMode && selectedSong && <div className="song-sequence" aria-label={copy.songTitle(songTitleText)}>{selectedSong.sequence.map((note, index) => <span key={`${note}-${index}`} className={index === practiceIndex ? 'current' : index < practiceIndex ? 'played' : ''}>{note.replace(/\d+$/, '')}</span>)}</div>}
           {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} upcoming={upcomingPitches} /><div className="practice-target"><strong>{practiceTarget}</strong><span>{microphoneMessage}</span></div></>}
           {practiceComplete && <div className="practice-complete" role="status">{practiceCompleteMessage}</div>}
