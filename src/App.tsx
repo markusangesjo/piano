@@ -16,6 +16,7 @@ type Tab = 'learn' | 'quiz' | 'practice'
 type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error' | 'completed'
 
 const LANGUAGE_KEY = 'note-nest-language'
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
 const PITCH_TO_MIDI: Record<Pitch, number> = { C4: 60, D4: 62, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
 const MIDI_LABELS: Record<number, string> = {
@@ -122,6 +123,7 @@ const COPY = {
     completed: '🎉 Du klarade hela mikrofonövningen!',
     restartPractice: 'Börja om övningen',
     footer: <>Gjord för nyfikna öron <span>·</span> Inga fel toner här 🎵</>,
+    version: (version: string) => `Version ${version}`,
     language: 'Språk',
     swedish: 'Svenska',
     english: 'English',
@@ -186,6 +188,7 @@ const COPY = {
     completed: '🎉 You finished the whole microphone practice!',
     restartPractice: 'Restart practice',
     footer: <>Made for curious ears <span>·</span> No wrong notes here 🎵</>,
+    version: (version: string) => `Version ${version}`,
     language: 'Language',
     swedish: 'Svenska',
     english: 'English',
@@ -636,7 +639,7 @@ function App() {
         </div>
       </div>
     </section>}
-    <footer>{copy.footer}</footer>
+    <footer>{copy.footer} <span>·</span> <span>{copy.version(`v${APP_VERSION}`)}</span></footer>
   </main>
 }
 
