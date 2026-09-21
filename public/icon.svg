@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Note Nest icon</title>
+  <desc id="desc">A simple piano keyboard with a purple note.</desc>
+  <rect width="512" height="512" rx="112" fill="#fffaf1"/>
+  <g transform="translate(80 112)">
+    <rect width="352" height="288" rx="28" fill="#ffffff" stroke="#d8d0c5" stroke-width="10"/>
+    <path d="M88 0v288M176 0v288M264 0v288" stroke="#d8d0c5" stroke-width="8"/>
+    <rect x="62" width="52" height="152" rx="0 0 12 12" fill="#2a2639"/>
+    <rect x="150" width="52" height="152" rx="0 0 12 12" fill="#2a2639"/>
+    <rect x="238" width="52" height="152" rx="0 0 12 12" fill="#2a2639"/>
+  </g>
+  <ellipse cx="256" cy="158" rx="56" ry="42" fill="#7165d7"/>
+  <rect x="300" y="58" width="16" height="140" rx="8" fill="#7165d7"/>
+</svg>

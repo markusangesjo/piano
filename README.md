@@ -13,7 +13,31 @@ npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite. Validate a production build with `npm run build`; run the tests with `npm test -- --run`.
+Open the local URL shown by Vite. For normal app development, the service worker stays disabled in dev mode so cached assets do not interfere with iteration.
+
+Validate the production build and the generated PWA locally with:
+
+```bash
+npm run build
+npm run preview
+```
+
+Then open the preview URL in Chrome, Edge, or Safari and:
+
+1. confirm the app offers installation or **Add to Home Screen**
+2. load the app once while online so the shell and icons are cached
+3. switch the browser to offline mode and refresh to confirm the lesson and piano still open
+
+Run the tests with:
+
+```bash
+npm test
+```
+
+Notes:
+
+- Install prompts are browser-dependent. Chromium browsers show a native install UI; on iPhone/iPad, use Safari’s **Add to Home Screen** action.
+- The app itself works offline after the first production visit. Google Fonts are cached when available, but if a browser blocks or skips those requests the app falls back to system fonts without affecting piano/audio behavior.
 
 ## Deploying to GitHub Pages
 
