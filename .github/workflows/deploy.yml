@@ -12,11 +12,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - id: version
@@ -44,11 +44,11 @@ jobs:
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -57,16 +57,16 @@ jobs:
         env:
           VITE_BASE_PATH: /piano/
           VITE_APP_VERSION: ${{ needs.version.outputs.version }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
