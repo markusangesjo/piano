@@ -41,4 +41,6 @@ Notes:
 
 ## Deploying to GitHub Pages
 
-The included `.github/workflows/deploy.yml` builds and publishes on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**. Vite is configured with a relative base path, so the static app works for project pages and custom domains.
+The included `.github/workflows/deploy.yml` builds and publishes on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+The workflow builds the PWA with `VITE_BASE_PATH=/piano/` so the manifest scope, service worker, and asset URLs match this repository’s GitHub Pages project URL. If you later move the app to a custom domain or a different subpath, update that environment variable to the deployed root path (for example `/`).
