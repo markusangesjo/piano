@@ -80,4 +80,14 @@ describe('Note Nest lesson', () => {
     expect(screen.getByRole('button', { name: 'Spela E4' })).toHaveClass('active')
     expect(screen.getByRole('button', { name: 'Spela A4' })).not.toHaveClass('active')
   })
+
+  it('offers microphone-guided practice with a browser support fallback', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
+    expect(screen.getByRole('heading', { name: /lyssna på ditt riktiga piano/i })).toBeInTheDocument()
+    expect(screen.getByText('Starta mikrofonen och spela tonen nära enheten.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Starta mikrofon' }))
+    expect(screen.getByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toBeInTheDocument()
+  })
 })
