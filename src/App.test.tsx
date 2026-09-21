@@ -162,13 +162,32 @@ describe('Note Nest lesson', () => {
     expect(blackKey).toHaveClass('active')
   })
 
-  it('keeps the quiz scoped to white keys', async () => {
+  it('shows the black keys in the quiz while the questions stay white-note-only', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
-    expect(screen.getByText('Quizet använder bara vita tangenter (C4–C5).')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Spela C♯4 / D♭4' })).not.toBeInTheDocument()
-    expect(within(screen.getByLabelText('Pianoklaviatur från C4 till C5')).getAllByRole('button')).toHaveLength(PITCHES.length)
+    expect(screen.getByText('Quizet frågar bara efter de vita tonerna C4–C5.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Spela C♯4 / D♭4' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Spela A♯4 / B♭4' })).toBeInTheDocument()
+    expect(within(screen.getByLabelText('Pianoklaviatur från C4 till C5')).getAllByRole('button')).toHaveLength(PITCHES.length + BLACK_KEYS.length)
+  })
+
+  it('keeps the question and highlights nothing when a black key is played in the quiz', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
+
+    const blackKey = screen.getByRole('button', { name: 'Spela F♯4 / G♭4' })
+    await user.click(blackKey)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Du tryckte på den svarta tangenten F♯4 / G♭4')
+    expect(blackKey).not.toHaveClass('active')
+    expect(screen.getByRole('button', { name: 'Spela E4' })).not.toHaveClass('active')
+    expect(screen.getByRole('img', { name: 'Diskantklav med tonen E4' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /försök igen/i }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Diskantklav med tonen E4' })).toBeInTheDocument()
   })
 
   it('does not reveal the quiz answer before or after an incorrect selection', async () => {

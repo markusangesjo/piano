@@ -55,5 +55,11 @@ export const PITCH_INFO: Record<SongPitch, { letter: string; octave: number; y: 
 export const getPitchInfo = (pitch: Pitch) => PITCH_INFO[pitch]
 export const pitchLabel = (pitch: Pitch) => pitch
 const BLACK_KEY_FREQUENCIES = new Map(BLACK_KEYS.map((key) => [key.id, key.frequency] as const))
+const BLACK_KEY_LABELS = new Map(BLACK_KEYS.map((key) => [key.id, key.label] as const))
 
 export const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch as BlackKey) ?? null
+
+// White keys are exactly the eight taught pitches; everything else on the
+// keyboard is an accidental, which is labelled with both of its note names.
+export const isWhiteKey = (key: PianoKey): key is Pitch => PITCHES.includes(key as Pitch)
+export const pianoKeyLabel = (key: PianoKey) => BLACK_KEY_LABELS.get(key as BlackKey) ?? key
