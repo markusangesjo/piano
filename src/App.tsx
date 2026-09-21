@@ -13,7 +13,7 @@ export type BlackKey = typeof BLACK_KEYS[number]['id']
 type PianoKey = Pitch | BlackKey
 type Language = 'sv' | 'en'
 type Tab = 'learn' | 'quiz' | 'practice'
-type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error'
+type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error' | 'completed'
 
 const LANGUAGE_KEY = 'note-nest-language'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
@@ -99,6 +99,7 @@ const COPY = {
     microphoneUnsupported: 'Den här webbläsaren saknar mikrofonstöd för notigenkänning.',
     microphoneDenied: 'Mikrofonbehörighet nekades. Tillåt mikrofonen och försök igen.',
     microphoneError: 'Kunde inte starta mikrofonlyssning just nu.',
+    microphoneCompleted: 'Mikrofonövningen är klar.',
     target: (n: Pitch) => `Spela ${n} på ditt riktiga piano`,
     detected: 'Hörd ton',
     detectedNone: 'Ingen stabil ton ännu',
@@ -162,6 +163,7 @@ const COPY = {
     microphoneUnsupported: 'This browser does not support microphone pitch detection.',
     microphoneDenied: 'Microphone permission was denied. Allow it and try again.',
     microphoneError: 'Could not start microphone listening right now.',
+    microphoneCompleted: 'The microphone practice is complete.',
     target: (n: Pitch) => `Play ${n} on your real piano`,
     detected: 'Heard pitch',
     detectedNone: 'No stable pitch yet',
@@ -326,9 +328,9 @@ function App() {
     matchedRef.current = false
   }
 
-  const stopMicrophone = () => {
+  const stopMicrophone = (nextStatus: MicrophoneStatus = 'idle') => {
     teardownMicrophone()
-    setMicStatus('idle')
+    setMicStatus(nextStatus)
   }
 
   const restartPractice = () => {
@@ -434,7 +436,7 @@ function App() {
               const nextIndex = practiceIndexRef.current + 1
               if (nextIndex >= PRACTICE_SEQUENCE.length) {
                 setPracticeComplete(true)
-                stopMicrophone()
+                stopMicrophone('completed')
               } else {
                 setPracticeIndex(nextIndex)
               }
@@ -470,6 +472,8 @@ function App() {
           ? copy.microphoneDenied
           : micStatus === 'error'
             ? copy.microphoneError
+          : micStatus === 'completed'
+            ? copy.microphoneCompleted
             : copy.microphoneIdle
 
   const practiceFeedback = heardCorrect === true
@@ -507,7 +511,7 @@ function App() {
           <small>{practiceFeedback}</small>
         </div>
         <div className="practice-actions">
-          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? stopMicrophone : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
+          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone() : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
           <button className="secondary" type="button" onClick={() => { stopMicrophone(); restartPractice() }}>{copy.restartPractice}</button>
         </div>
       </div>
