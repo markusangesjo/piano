@@ -12,12 +12,13 @@ export const BLACK_KEYS = [
 export type BlackKey = typeof BLACK_KEYS[number]['id']
 type PianoKey = Pitch | BlackKey
 type Language = 'sv' | 'en'
-type Tab = 'learn' | 'quiz' | 'practice'
+type Tab = 'learn' | 'quiz' | 'practice' | 'song'
 type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'denied' | 'error' | 'completed'
 
 const LANGUAGE_KEY = 'note-nest-language'
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
+const SONG_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
 const PITCH_TO_MIDI: Record<Pitch, number> = { C4: 60, D4: 62, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
 const MIDI_LABELS: Record<number, string> = {
   60: 'C4',
@@ -72,11 +73,15 @@ const COPY = {
     learn: 'Lär dig en ton',
     quiz: 'Snabbquiz',
     practice: 'Spela med mikrofon',
+    song: 'Blinka lilla stjärna',
     lesson: 'LEKTION 01 · DISKANTKLAVEN',
     practiceLesson: (step: number, total: number) => `GUIDAD ÖVNING · STEG ${step} AV ${total}`,
+    songLesson: (step: number, total: number) => `BLINKA LILLA STJÄRNA · NOT ${step} AV ${total}`,
     meet: 'Möt dina ',
     note: 'tonvänner.',
     practiceLead: 'Låt mobilen lyssna medan du spelar samma ton på ett riktigt piano nära mikrofonen.',
+    songTitle: 'Spela Blinka lilla stjärna',
+    songLead: 'Följ noterna en i taget. Appen lyssnar och går vidare när du spelar rätt ton.',
     lessonIntro: 'Lär dig hitta tonerna C4–C5 på diskantklavens notlinjer och pianot.',
     every: 'Varje ton har ett namn',
     seven: 'Vi börjar med åtta toner från C4 till C5: ',
@@ -122,6 +127,10 @@ const COPY = {
     detectedWrong: 'Inte rätt ton ännu — försök igen.',
     completed: '🎉 Du klarade hela mikrofonövningen!',
     restartPractice: 'Börja om övningen',
+    songIntro: 'Spela melodin på ditt riktiga piano. Börja med tonen som visas på notlinjerna.',
+    songTarget: (n: Pitch) => `Spela nästa ton: ${n}`,
+    songCompleted: '🎉 Du spelade hela Blinka lilla stjärna!',
+    restartSong: 'Börja om låten',
     footer: <>Gjord för nyfikna öron <span>·</span> Inga fel toner här 🎵</>,
     version: (version: string) => `Version ${version}`,
     language: 'Språk',
@@ -137,11 +146,15 @@ const COPY = {
     learn: 'Learn a pitch',
     quiz: 'Quick quiz',
     practice: 'Play with microphone',
+    song: 'Twinkle Twinkle Little Star',
     lesson: 'LESSON 01 · TREBLE CLEF',
     practiceLesson: (step: number, total: number) => `GUIDED PRACTICE · STEP ${step} OF ${total}`,
+    songLesson: (step: number, total: number) => `TWINKLE TWINKLE · NOTE ${step} OF ${total}`,
     meet: 'Meet your ',
     note: 'pitch friends.',
     practiceLead: 'Let the device listen while you play the same pitch on a real piano near the microphone.',
+    songTitle: 'Play Twinkle Twinkle Little Star',
+    songLead: 'Follow the notes one at a time. The app listens and moves on when you play the right pitch.',
     lessonIntro: 'Learn to find pitches C4–C5 on the treble staff and piano.',
     every: 'Every pitch has a name',
     seven: 'We start with eight pitches from C4 to C5: ',
@@ -187,6 +200,10 @@ const COPY = {
     detectedWrong: 'Not the right pitch yet — try again.',
     completed: '🎉 You finished the whole microphone practice!',
     restartPractice: 'Restart practice',
+    songIntro: 'Play the melody on your real piano. Start with the note shown on the staff.',
+    songTarget: (n: Pitch) => `Play the next note: ${n}`,
+    songCompleted: '🎉 You played the whole Twinkle Twinkle Little Star!',
+    restartSong: 'Restart song',
     footer: <>Made for curious ears <span>·</span> No wrong notes here 🎵</>,
     version: (version: string) => `Version ${version}`,
     language: 'Language',
@@ -373,7 +390,9 @@ function App() {
   const [heardPitch, setHeardPitch] = useState<string | null>(null)
   const [heardCorrect, setHeardCorrect] = useState<boolean | null>(null)
   const quizChoices = useMemo(() => [...PITCHES].sort(() => Math.random() - 0.5), [quizPitch])
-  const currentPracticePitch = PRACTICE_SEQUENCE[practiceIndex]
+  const songMode = tab === 'song'
+  const activeSequence = songMode ? SONG_SEQUENCE : PRACTICE_SEQUENCE
+  const currentPracticePitch = activeSequence[practiceIndex] ?? activeSequence[activeSequence.length - 1]
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -393,7 +412,7 @@ function App() {
   useEffect(() => { expectedMidiRef.current = PITCH_TO_MIDI[currentPracticePitch] }, [currentPracticePitch])
   useEffect(() => { practiceCompleteRef.current = practiceComplete }, [practiceComplete])
   useEffect(() => {
-    if (tab !== 'practice' && (micStatus === 'listening' || micStatus === 'requesting')) {
+    if ((tab !== 'practice' && tab !== 'song') && (micStatus === 'listening' || micStatus === 'requesting')) {
       stopMicrophone('idle')
     }
   }, [tab, micStatus])
@@ -432,6 +451,12 @@ function App() {
     setHeardPitch(null)
     setHeardCorrect(null)
     matchedRef.current = false
+  }
+
+  const openPracticeMode = (nextTab: 'practice' | 'song') => {
+    stopMicrophone('idle')
+    restartPractice()
+    setTab(nextTab)
   }
 
   const chooseAnswer = (choice: PianoKey) => {
@@ -540,7 +565,7 @@ function App() {
               setHeardPitch(null)
               setHeardCorrect(null)
               const nextIndex = practiceIndexRef.current + 1
-              if (nextIndex >= PRACTICE_SEQUENCE.length) {
+              if (nextIndex >= activeSequence.length) {
                 practiceCompleteRef.current = true
                 setPracticeComplete(true)
                 stopMicrophone('completed')
@@ -605,6 +630,13 @@ function App() {
                 ? copy.detectedWrong
                 : copy.detectedNone
 
+  const practiceTitle = songMode ? copy.songTitle : copy.microphoneTitle
+  const practiceLead = songMode ? copy.songLead : copy.practiceLead
+  const practiceIntro = songMode ? copy.songIntro : copy.microphoneIntro
+  const practiceTarget = songMode ? copy.songTarget(currentPracticePitch) : copy.target(currentPracticePitch)
+  const practiceCompleteMessage = songMode ? copy.songCompleted : copy.completed
+  const restartLabel = songMode ? copy.restartSong : copy.restartPractice
+
   return <main>
     <header className="topbar">
       <a className="brand" href="#" aria-label={copy.home}><span className="brand-mark">♫</span><span>note nest</span></a>
@@ -612,7 +644,7 @@ function App() {
       <div className="streak" aria-label={copy.streak(streak)}>🔥 <b>{streak}</b></div>
       <div className="language-toggle" role="group" aria-label={copy.language}><button type="button" className={language === 'sv' ? 'selected' : ''} aria-pressed={language === 'sv'} aria-label={copy.switchTo(copy.swedish)} onClick={() => setLanguage('sv')}>{copy.swedish}</button><button type="button" className={language === 'en' ? 'selected' : ''} aria-pressed={language === 'en'} aria-label={copy.switchTo(copy.english)} onClick={() => setLanguage('en')}>{copy.english}</button></div>
     </header>
-    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => setTab('practice')}>{copy.practice}</button></nav>
+    <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => openPracticeMode('practice')}>{copy.practice}</button><button className={tab === 'song' ? 'selected' : ''} onClick={() => openPracticeMode('song')}>{copy.song}</button></nav>
     {tab === 'learn' ? <section className="page">
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
       <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); void playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
@@ -624,18 +656,19 @@ function App() {
       <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer === quizPitch ? answer : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
     </section> : <section className="page quiz-page">
-      <div className="intro"><p className="eyebrow">{copy.practiceLesson(practiceComplete ? PRACTICE_SEQUENCE.length : practiceIndex + 1, PRACTICE_SEQUENCE.length)}</p><h1>{copy.microphoneTitle}</h1><p className="lede">{copy.practiceLead}</p></div>
+      <div className="intro"><p className="eyebrow">{songMode ? copy.songLesson(practiceComplete ? SONG_SEQUENCE.length : practiceIndex + 1, SONG_SEQUENCE.length) : copy.practiceLesson(practiceComplete ? PRACTICE_SEQUENCE.length : practiceIndex + 1, PRACTICE_SEQUENCE.length)}</p><h1>{practiceTitle}</h1><p className="lede">{practiceLead}</p></div>
       <div className="quiz-card practice-card">
-        <div className="card-copy"><span className="step">🎙</span><div><h2>{copy.microphoneTitle}</h2><p>{copy.microphoneIntro}</p></div></div>
-        {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} /><div className="practice-target"><strong>{copy.target(currentPracticePitch)}</strong><span>{microphoneMessage}</span></div></>}
-        {practiceComplete && <div className="practice-complete" role="status">{copy.completed}</div>}
+        <div className="card-copy"><span className="step">{songMode ? '♫' : '🎙'}</span><div><h2>{practiceTitle}</h2><p>{practiceIntro}</p></div></div>
+        {songMode && <div className="song-sequence" aria-label={copy.songTitle}>{SONG_SEQUENCE.map((note, index) => <span key={`${note}-${index}`} className={index === practiceIndex ? 'current' : index < practiceIndex ? 'played' : ''}>{note.replace('4', '').replace('5', '')}</span>)}</div>}
+        {!practiceComplete && <><Staff pitch={currentPracticePitch} copy={copy} /><div className="practice-target"><strong>{practiceTarget}</strong><span>{microphoneMessage}</span></div></>}
+        {practiceComplete && <div className="practice-complete" role="status">{practiceCompleteMessage}</div>}
         <div className={`feedback practice-feedback ${heardCorrect === true ? 'correct' : heardCorrect === false ? 'oops' : ''}`} role="status">
           <strong>{copy.detected}:</strong> {heardPitchLabel}
           <small>{practiceFeedback}</small>
         </div>
         <div className="practice-actions">
           {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
-          <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{copy.restartPractice}</button>
+          <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{restartLabel}</button>
         </div>
       </div>
     </section>}

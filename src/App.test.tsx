@@ -233,6 +233,19 @@ describe('Note Nest lesson', () => {
     expect(screen.getAllByText('Den här webbläsaren saknar mikrofonstöd för notigenkänning.')).toHaveLength(2)
   })
 
+  it('offers a Twinkle Twinkle song mode with the melody notes in order', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Blinka lilla stjärna' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Blinka lilla stjärna' })).toBeInTheDocument()
+    expect(screen.getByText('BLINKA LILLA STJÄRNA · NOT 1 AV 42')).toBeInTheDocument()
+    expect(screen.getByText('Spela nästa ton: C4')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Starta mikrofon' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Spela Blinka lilla stjärna').querySelectorAll('.song-sequence .current')).toHaveLength(1)
+  })
+
   it('shows a helpful message when microphone permission is denied', async () => {
     const user = userEvent.setup()
     vi.stubGlobal('AudioContext', class {})
