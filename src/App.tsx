@@ -48,10 +48,10 @@ export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: numb
 export const getPitchInfo = (pitch: Pitch) => PITCH_INFO[pitch]
 export const pitchLabel = (pitch: Pitch) => pitch
 const BLACK_KEY_FREQUENCIES = new Map(BLACK_KEYS.map((key) => [key.id, key.frequency] as const))
-const ATTACK_TIME = 0.01
-const PEAK_TIME = 0.08
-const RELEASE_TIME = 1.2
-const MASTER_VOLUME = 0.9
+const ATTACK_TIME = 0.018
+const PEAK_TIME = 0.11
+const RELEASE_TIME = 1.65
+const MASTER_VOLUME = 0.82
 
 type BrowserAudioContext = typeof AudioContext
 type AudioContextWindow = typeof window & { webkitAudioContext?: BrowserAudioContext }
@@ -207,11 +207,11 @@ function getMasterOutput(context: AudioContext) {
   if (masterOutput && masterOutputContext === context) return masterOutput
 
   const compressor = context.createDynamicsCompressor()
-  compressor.threshold.value = -18
-  compressor.knee.value = 18
-  compressor.ratio.value = 3
-  compressor.attack.value = 0.003
-  compressor.release.value = 0.2
+  compressor.threshold.value = -22
+  compressor.knee.value = 24
+  compressor.ratio.value = 2.2
+  compressor.attack.value = 0.012
+  compressor.release.value = 0.32
 
   const gain = context.createGain()
   gain.gain.value = MASTER_VOLUME
@@ -258,19 +258,19 @@ async function playTone(pitch: PianoKey) {
     const filter = context.createBiquadFilter()
 
     filter.type = 'lowpass'
-    filter.frequency.setValueAtTime(4200, now)
-    filter.frequency.exponentialRampToValueAtTime(1800, releaseAt)
-    filter.Q.value = 0.9
+    filter.frequency.setValueAtTime(3200, now)
+    filter.frequency.exponentialRampToValueAtTime(1450, releaseAt)
+    filter.Q.value = 0.55
 
     voiceMix.gain.setValueAtTime(0.0001, now)
-    voiceMix.gain.exponentialRampToValueAtTime(0.42, now + ATTACK_TIME)
-    voiceMix.gain.exponentialRampToValueAtTime(0.26, now + PEAK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.38, now + ATTACK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.22, now + PEAK_TIME)
     voiceMix.gain.exponentialRampToValueAtTime(0.0001, releaseAt)
 
     ;[
-      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.85, startRatio: 1.003 },
-      { type: 'sine' as OscillatorType, multiple: 2, level: 0.22, startRatio: 1.004 },
-      { type: 'sine' as OscillatorType, multiple: 3, level: 0.12, startRatio: 0.999 },
+      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.95, startRatio: 1.002 },
+      { type: 'sine' as OscillatorType, multiple: 2, level: 0.16, startRatio: 1.003 },
+      { type: 'sine' as OscillatorType, multiple: 3, level: 0.045, startRatio: 0.998 },
     ].forEach(({ type, multiple, level, startRatio }) => {
       const osc = context.createOscillator()
       const partialGain = context.createGain()
