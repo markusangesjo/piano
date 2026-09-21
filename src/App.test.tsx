@@ -43,13 +43,24 @@ describe('Note Nest lesson', () => {
     expect(window.localStorage.getItem('note-nest-language')).toBe('en')
   })
 
-  it('moves to the quiz and gives feedback for an answer', async () => {
+  it('moves to the quiz and advances after a correct answer', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
     expect(screen.getByRole('heading', { name: /vilken ton är det här/i })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Diskantklav med tonen E4' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Spela E4' }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Diskantklav med tonen E4' })).not.toBeInTheDocument()
+  })
+
+  it('shows feedback without revealing the correct key after a wrong answer', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
     await user.click(screen.getByRole('button', { name: 'Spela A4' }))
     expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Spela E4' })).not.toHaveClass('active')
   })
 
   it('uses the treble staff positions and labels the C4 ledger line as middle C', async () => {
@@ -87,7 +98,7 @@ describe('Note Nest lesson', () => {
     expect(within(screen.getByLabelText('Pianoklaviatur från C4 till C5')).getAllByRole('button')).toHaveLength(PITCHES.length)
   })
 
-  it('does not reveal the quiz answer before selection and highlights feedback afterward', async () => {
+  it('does not reveal the quiz answer before or after an incorrect selection', async () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
@@ -96,7 +107,7 @@ describe('Note Nest lesson', () => {
     expect(targetKey).not.toHaveClass('active')
 
     await user.click(screen.getByRole('button', { name: 'Spela A4' }))
-    expect(screen.getByRole('button', { name: 'Spela E4' })).toHaveClass('active')
+    expect(screen.getByRole('button', { name: 'Spela E4' })).not.toHaveClass('active')
     expect(screen.getByRole('button', { name: 'Spela A4' })).not.toHaveClass('active')
   })
 
