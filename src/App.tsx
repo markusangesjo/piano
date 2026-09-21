@@ -301,7 +301,7 @@ function App() {
   useEffect(() => { practiceCompleteRef.current = practiceComplete }, [practiceComplete])
   useEffect(() => {
     if (tab !== 'practice' && (micStatus === 'listening' || micStatus === 'requesting')) {
-      stopMicrophone()
+      stopMicrophone('idle')
     }
   }, [tab, micStatus])
   useEffect(() => () => {
@@ -327,7 +327,7 @@ function App() {
     matchedRef.current = false
   }
 
-  const stopMicrophone = (nextStatus: MicrophoneStatus = practiceCompleteRef.current ? 'completed' : 'idle') => {
+  const stopMicrophone = (nextStatus: MicrophoneStatus) => {
     teardownMicrophone()
     setMicStatus(nextStatus)
   }
@@ -447,7 +447,7 @@ function App() {
               if (nextIndex >= PRACTICE_SEQUENCE.length) {
                 practiceCompleteRef.current = true
                 setPracticeComplete(true)
-                stopMicrophone()
+                stopMicrophone('completed')
               } else {
                 setPracticeIndex(nextIndex)
               }
@@ -538,8 +538,8 @@ function App() {
           <small>{practiceFeedback}</small>
         </div>
         <div className="practice-actions">
-          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone() : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
-          <button className="secondary" type="button" onClick={() => { stopMicrophone(); restartPractice() }}>{copy.restartPractice}</button>
+          {!practiceComplete && <button className="primary" type="button" onClick={micStatus === 'listening' ? () => stopMicrophone('idle') : startMicrophone}>{micStatus === 'listening' ? copy.microphoneStop : copy.microphoneButton}</button>}
+          <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{copy.restartPractice}</button>
         </div>
       </div>
     </section>}
