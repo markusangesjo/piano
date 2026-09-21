@@ -31,7 +31,7 @@ describe('registerPWA', () => {
       isProd: true,
       serviceWorker: {
         ready: Promise.resolve({ update }),
-      } as ServiceWorkerContainer,
+      } as unknown as ServiceWorkerContainer,
       loadRegister,
     })).resolves.toBe(true)
     expect(loadRegister).toHaveBeenCalledTimes(1)
