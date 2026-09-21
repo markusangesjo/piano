@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
+import App, { BLACK_KEYS, PITCHES, PITCH_INFO, resetAudioState } from './App'
 import { afterEach, vi } from 'vitest'
 
 afterEach(() => {
@@ -10,8 +10,20 @@ afterEach(() => {
 })
 
 describe('Note Nest lesson', () => {
+  const originalAudioContext = window.AudioContext
+  const originalWebkitAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
   beforeEach(() => {
     window.localStorage.clear()
+    return resetAudioState()
+  })
+
+  afterEach(async () => {
+    await resetAudioState()
+    if (originalAudioContext) Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: originalAudioContext })
+    else Reflect.deleteProperty(window, 'AudioContext')
+    if (originalWebkitAudioContext) Object.defineProperty(window, 'webkitAudioContext', { configurable: true, writable: true, value: originalWebkitAudioContext })
+    else Reflect.deleteProperty(window, 'webkitAudioContext')
   })
 
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
@@ -86,6 +98,117 @@ describe('Note Nest lesson', () => {
     await user.click(screen.getByRole('button', { name: 'Spela A4' }))
     expect(screen.getByRole('button', { name: 'Spela E4' })).toHaveClass('active')
     expect(screen.getByRole('button', { name: 'Spela A4' })).not.toHaveClass('active')
+  })
+
+  it('builds a fuller audio chain when a key is played', async () => {
+    const user = userEvent.setup()
+    const createOscillator = vi.fn(() => ({
+      type: 'sine',
+      frequency: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      detune: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }))
+    const createGain = vi.fn(() => ({
+      gain: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createBiquadFilter = vi.fn(() => ({
+      type: 'lowpass',
+      frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      Q: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createDynamicsCompressor = vi.fn(() => ({
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+
+    class MockAudioContext {
+      currentTime = 0
+      state: AudioContextState = 'running'
+      destination = {}
+      resume = vi.fn(async () => undefined)
+      close = vi.fn(async () => undefined)
+      createOscillator = createOscillator
+      createGain = createGain
+      createBiquadFilter = createBiquadFilter
+      createDynamicsCompressor = createDynamicsCompressor
+    }
+
+    Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: MockAudioContext as unknown as typeof AudioContext })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Spela C4, mitt-C' }))
+
+    expect(createOscillator).toHaveBeenCalledTimes(3)
+    expect(createGain).toHaveBeenCalledTimes(5)
+    expect(createBiquadFilter).toHaveBeenCalledTimes(1)
+    expect(createDynamicsCompressor).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes a suspended audio context before creating the note graph', async () => {
+    const user = userEvent.setup()
+    const steps: string[] = []
+    const createOscillator = vi.fn(() => {
+      steps.push('createOscillator')
+      return {
+        type: 'sine',
+        frequency: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+        detune: { value: 0 },
+        connect: vi.fn(function connect(this: object) { return this }),
+        start: vi.fn(),
+        stop: vi.fn(),
+      }
+    })
+    const createGain = vi.fn(() => ({
+      gain: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createBiquadFilter = vi.fn(() => ({
+      type: 'lowpass',
+      frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      Q: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createDynamicsCompressor = vi.fn(() => ({
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const resume = vi.fn(async () => {
+      steps.push('resume:start')
+      await Promise.resolve()
+      steps.push('resume:end')
+    })
+
+    class MockAudioContext {
+      currentTime = 0
+      state: AudioContextState = 'suspended'
+      destination = {}
+      resume = resume
+      close = vi.fn(async () => undefined)
+      createOscillator = createOscillator
+      createGain = createGain
+      createBiquadFilter = createBiquadFilter
+      createDynamicsCompressor = createDynamicsCompressor
+    }
+
+    Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: MockAudioContext as unknown as typeof AudioContext })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Spela C4, mitt-C' }))
+
+    expect(resume).toHaveBeenCalledTimes(1)
+    expect(steps.indexOf('resume:end')).toBeLessThan(steps.indexOf('createOscillator'))
   })
 
   it('offers microphone-guided practice with a browser support fallback', async () => {
@@ -238,7 +361,6 @@ describe('Note Nest lesson', () => {
         expect(screen.getByText(expectedTargets[i])).toBeInTheDocument()
       }
     }
-
     expect(screen.getByText('🎉 Du klarade hela mikrofonövningen!')).toBeInTheDocument()
     expect(trackStop).toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Stoppa mikrofon' })).not.toBeInTheDocument()

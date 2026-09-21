@@ -47,6 +47,20 @@ export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: numb
 
 export const getPitchInfo = (pitch: Pitch) => PITCH_INFO[pitch]
 export const pitchLabel = (pitch: Pitch) => pitch
+const BLACK_KEY_FREQUENCIES = new Map(BLACK_KEYS.map((key) => [key.id, key.frequency] as const))
+const ATTACK_TIME = 0.01
+const PEAK_TIME = 0.08
+const RELEASE_TIME = 1.2
+const MASTER_VOLUME = 0.9
+
+type BrowserAudioContext = typeof AudioContext
+type AudioContextWindow = typeof window & { webkitAudioContext?: BrowserAudioContext }
+
+let audioContext: AudioContext | null = null
+let masterOutput: GainNode | null = null
+let masterOutputContext: AudioContext | null = null
+let closingAudioContext: AudioContext | null = null
+let closingAudioContextPromise: Promise<void> | null = null
 
 const COPY = {
   sv: {
@@ -179,22 +193,97 @@ const COPY = {
   },
 } as const
 
-function playTone(pitch: PianoKey) {
+const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch as BlackKey) ?? null
+
+function getAudioContext() {
+  if (audioContext) return audioContext
+  const AudioContextClass = window.AudioContext || (window as AudioContextWindow).webkitAudioContext
+  if (!AudioContextClass) return null
+  audioContext = new AudioContextClass()
+  return audioContext
+}
+
+function getMasterOutput(context: AudioContext) {
+  if (masterOutput && masterOutputContext === context) return masterOutput
+
+  const compressor = context.createDynamicsCompressor()
+  compressor.threshold.value = -18
+  compressor.knee.value = 18
+  compressor.ratio.value = 3
+  compressor.attack.value = 0.003
+  compressor.release.value = 0.2
+
+  const gain = context.createGain()
+  gain.gain.value = MASTER_VOLUME
+
+  compressor.connect(gain).connect(context.destination)
+  masterOutput = gain
+  masterOutputContext = context
+  return masterOutput
+}
+
+export async function resetAudioState() {
+  const context = audioContext
+  audioContext = null
+  masterOutput = null
+  masterOutputContext = null
+  if (!context || context.state === 'closed') return
+  if (closingAudioContext === context && closingAudioContextPromise) {
+    await closingAudioContextPromise
+    return
+  }
+
+  closingAudioContext = context
+  const closePromise = context.close()
+  closingAudioContextPromise = closePromise.finally(() => {
+    if (closingAudioContext === context && closingAudioContextPromise === closePromise) {
+      closingAudioContext = null
+      closingAudioContextPromise = null
+    }
+  })
+  await closingAudioContextPromise
+}
+
+async function playTone(pitch: PianoKey) {
   try {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) return
-    const context = new AudioContextClass()
-    const osc = context.createOscillator()
-    const gain = context.createGain()
-    osc.frequency.value = pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEYS.find((key) => key.id === pitch)?.frequency ?? 0
-    osc.type = 'sine'
-    gain.gain.setValueAtTime(0.0001, context.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.65)
-    osc.connect(gain).connect(context.destination)
-    osc.start()
-    osc.stop(context.currentTime + 0.7)
-    osc.addEventListener('ended', () => void context.close())
+    const context = getAudioContext()
+    if (!context) return
+    if (context.state === 'suspended') await context.resume()
+
+    const frequency = getFrequency(pitch)
+    if (!frequency) return
+    const now = context.currentTime
+    const releaseAt = now + RELEASE_TIME
+    const voiceMix = context.createGain()
+    const filter = context.createBiquadFilter()
+
+    filter.type = 'lowpass'
+    filter.frequency.setValueAtTime(4200, now)
+    filter.frequency.exponentialRampToValueAtTime(1800, releaseAt)
+    filter.Q.value = 0.9
+
+    voiceMix.gain.setValueAtTime(0.0001, now)
+    voiceMix.gain.exponentialRampToValueAtTime(0.42, now + ATTACK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.26, now + PEAK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.0001, releaseAt)
+
+    ;[
+      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.85, startRatio: 1.003 },
+      { type: 'sine' as OscillatorType, multiple: 2, level: 0.22, startRatio: 1.004 },
+      { type: 'sine' as OscillatorType, multiple: 3, level: 0.12, startRatio: 0.999 },
+    ].forEach(({ type, multiple, level, startRatio }) => {
+      const osc = context.createOscillator()
+      const partialGain = context.createGain()
+      osc.type = type
+      osc.frequency.setValueAtTime(frequency * startRatio * multiple, now)
+      osc.frequency.exponentialRampToValueAtTime(frequency * multiple, now + 0.03)
+      partialGain.gain.value = level
+      osc.connect(partialGain).connect(voiceMix)
+      osc.start(now)
+      osc.stop(releaseAt + 0.05)
+    })
+
+    voiceMix.connect(filter).connect(getMasterOutput(context))
   } catch { /* sound is a lovely extra, never a requirement */ }
 }
 
@@ -254,8 +343,8 @@ function Staff({ pitch, copy }: { pitch: Pitch; copy: typeof COPY[Language] }) {
 
 function Piano({ active, onPick, copy, includeBlackKeys = true }: { active: PianoKey | null; onPick: (pitch: PianoKey) => void; copy: typeof COPY[Language]; includeBlackKeys?: boolean }) {
   return <div className={`piano ${includeBlackKeys ? 'has-black-keys' : ''}`} aria-label={copy.keyboard}>
-    {PITCHES.map((pitch) => <button key={pitch} className={`white-key ${active === pitch ? 'active' : ''}`} style={{ '--key-color': PITCH_INFO[pitch].color } as React.CSSProperties} onClick={() => { onPick(pitch); playTone(pitch) }} aria-label={copy.playNote(pitch)}><span>{pitch}</span>{pitch === 'C4' && <small className="middle-c-marker">{copy.middleC}</small>}</button>)}
-    {includeBlackKeys && BLACK_KEYS.map((key, index) => <button key={key.id} className={`black-key ${active === key.id ? 'active' : ''}`} style={{ left: `${((index === 0 ? 1 : index === 1 ? 2 : index + 2) * 100) / 8}%` }} onClick={() => { onPick(key.id); playTone(key.id) }} aria-label={copy.blackKey(key.label)}><span>{key.label}</span></button>)}
+    {PITCHES.map((pitch) => <button key={pitch} className={`white-key ${active === pitch ? 'active' : ''}`} style={{ '--key-color': PITCH_INFO[pitch].color } as React.CSSProperties} onClick={() => { onPick(pitch); void playTone(pitch) }} aria-label={copy.playNote(pitch)}><span>{pitch}</span>{pitch === 'C4' && <small className="middle-c-marker">{copy.middleC}</small>}</button>)}
+    {includeBlackKeys && BLACK_KEYS.map((key, index) => <button key={key.id} className={`black-key ${active === key.id ? 'active' : ''}`} style={{ left: `${((index === 0 ? 1 : index === 1 ? 2 : index + 2) * 100) / 8}%` }} onClick={() => { onPick(key.id); void playTone(key.id) }} aria-label={copy.blackKey(key.label)}><span>{key.label}</span></button>)}
   </div>
 }
 
@@ -348,7 +437,7 @@ function App() {
     setAnswer(whiteChoice)
     if (whiteChoice === quizPitch) {
       setStreak((s) => s + 1)
-      playTone(whiteChoice)
+      void playTone(whiteChoice)
     } else {
       setStreak(0)
     }
@@ -521,7 +610,7 @@ function App() {
     <nav className="tabs" aria-label={copy.sections}><button className={tab === 'learn' ? 'selected' : ''} onClick={() => setTab('learn')}>{copy.learn}</button><button className={tab === 'quiz' ? 'selected' : ''} onClick={() => setTab('quiz')}>{copy.quiz} <span>✦</span></button><button className={tab === 'practice' ? 'selected' : ''} onClick={() => setTab('practice')}>{copy.practice}</button></nav>
     {tab === 'learn' ? <section className="page">
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
-      <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
+      <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); void playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
       <div className="lesson-card staff-card"><div className="card-copy"><span className="step">2</span><div><h2>{copy.spot}</h2><p>{copy.map}</p></div></div><Staff pitch={pitch} copy={copy} /><div className="note-caption" style={{ '--note-color': PITCH_INFO[pitch].color } as React.CSSProperties}><span className="caption-dot" />{copy.thisNote(pitch)}</div></div>
       <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={selectedKey} onPick={(key) => { setSelectedKey(key); if (PITCHES.includes(key as Pitch)) setPitch(key as Pitch) }} copy={copy} /></div>
       <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
