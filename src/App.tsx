@@ -760,6 +760,7 @@ function App() {
 
   useEffect(() => {
     if (tab !== 'practice' && tab !== 'song' && tab !== 'debug') return
+    if (tab === 'song' && !selectedSongId) return
 
     let cancelled = false
     const startIfPermissionGranted = async () => {
@@ -775,7 +776,7 @@ function App() {
 
     void startIfPermissionGranted()
     return () => { cancelled = true }
-  }, [tab])
+  }, [tab, selectedSongId])
 
   const microphoneMessage = micStatus === 'requesting'
     ? copy.microphoneWaiting
