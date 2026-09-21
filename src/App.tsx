@@ -129,16 +129,15 @@ async function playTone(pitch: PianoKey) {
     voiceMix.gain.exponentialRampToValueAtTime(0.0001, releaseAt)
 
     ;[
-      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.85, detune: 0 },
-      { type: 'sine' as OscillatorType, multiple: 2, level: 0.22, detune: 3 },
-      { type: 'sine' as OscillatorType, multiple: 3, level: 0.12, detune: -2 },
-    ].forEach(({ type, multiple, level, detune }) => {
+      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.85, startRatio: 1.003 },
+      { type: 'sine' as OscillatorType, multiple: 2, level: 0.22, startRatio: 1.004 },
+      { type: 'sine' as OscillatorType, multiple: 3, level: 0.12, startRatio: 0.999 },
+    ].forEach(({ type, multiple, level, startRatio }) => {
       const osc = context.createOscillator()
       const partialGain = context.createGain()
       osc.type = type
-      osc.frequency.setValueAtTime(frequency * 1.003 * multiple, now)
+      osc.frequency.setValueAtTime(frequency * startRatio * multiple, now)
       osc.frequency.exponentialRampToValueAtTime(frequency * multiple, now + 0.03)
-      osc.detune.value = detune
       partialGain.gain.value = level
       osc.connect(partialGain).connect(voiceMix)
       osc.start(now)

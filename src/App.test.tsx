@@ -140,4 +140,62 @@ describe('Note Nest lesson', () => {
     expect(createBiquadFilter).toHaveBeenCalledTimes(1)
     expect(createDynamicsCompressor).toHaveBeenCalledTimes(1)
   })
+
+  it('resumes a suspended audio context before creating the note graph', async () => {
+    const user = userEvent.setup()
+    const steps: string[] = []
+    const createOscillator = vi.fn(() => {
+      steps.push('createOscillator')
+      return {
+        type: 'sine',
+        frequency: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+        detune: { value: 0 },
+        connect: vi.fn(function connect(this: object) { return this }),
+        start: vi.fn(),
+        stop: vi.fn(),
+      }
+    })
+    const createGain = vi.fn(() => ({
+      gain: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createBiquadFilter = vi.fn(() => ({
+      type: 'lowpass',
+      frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      Q: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const createDynamicsCompressor = vi.fn(() => ({
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+      connect: vi.fn(function connect(this: object) { return this }),
+    }))
+    const resume = vi.fn(async () => {
+      steps.push('resume:start')
+      await Promise.resolve()
+      steps.push('resume:end')
+    })
+
+    class MockAudioContext {
+      currentTime = 0
+      state: AudioContextState = 'suspended'
+      destination = {}
+      resume = resume
+      createOscillator = createOscillator
+      createGain = createGain
+      createBiquadFilter = createBiquadFilter
+      createDynamicsCompressor = createDynamicsCompressor
+    }
+
+    Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: MockAudioContext as unknown as typeof AudioContext })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Spela C4, mitt-C' }))
+
+    expect(resume).toHaveBeenCalledTimes(1)
+    expect(steps.indexOf('resume:end')).toBeLessThan(steps.indexOf('createOscillator'))
+  })
 })
