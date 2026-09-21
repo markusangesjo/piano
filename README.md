@@ -2,6 +2,8 @@
 
 A playful, mobile-first first slice for kids learning beginner music theory and piano. It includes a guided treble-clef lesson, an interactive staff with accurate C4–C5 pitch positions, touch-friendly piano keys with optional Web Audio, a quick identification quiz, and a microphone-guided practice mode that listens for the correct pitch before advancing. C4 is middle C, shown on a ledger line below the staff.
 
+Learners can practise the free C4–C5 lesson, play along to three songs (Blinka lilla stjärna, Spanien är ett land där man dansar tango, and the opening of Für Elise) or open the **Felsökning / Debug** tab, which prints the detected pitch, its frequency, clarity and level together with the reason a reading was accepted or ignored. The footer shows the running version, which is stamped from the release tag during deployment.
+
 The interface is Swedish by default. Use the visible **Svenska / English** language toggle to switch languages; the selection is saved in `localStorage` and restored on the next visit. The lesson covers the C4–C5 range (C4 middle C through the C5 above the treble staff). The lesson keyboard includes touch-friendly black keys for C♯4/D♭4, D♯4/E♭4, F♯4/G♭4, G♯4/A♭4, and A♯4/B♭4, with labels and selection highlighting. The quiz intentionally stays white-note-only so learners practise the eight pitches shown on the staff. The microphone practice mode is also focused on the C4–C5 range and works best when you play a real piano close to the device microphone in a quiet room.
 
 ## Local development
@@ -34,10 +36,18 @@ Run the tests with:
 npm test
 ```
 
+Check types, linting and the production build the same way CI does:
+
+```bash
+npm run lint
+npm run build
+```
+
 Notes:
 
 - Install prompts are browser-dependent. Chromium browsers show a native install UI; on iPhone/iPad, use Safari’s **Add to Home Screen** action.
-- The app itself works offline after the first production visit. Google Fonts are cached when available, but if a browser blocks or skips those requests the app falls back to system fonts without affecting piano/audio behavior.
+- The app works offline from the first production visit, including its fonts: DM Sans and Nunito are self-hosted woff2 files in `src/assets/fonts/`, precached by the service worker, so the app makes no third-party requests at runtime.
+- `.github/workflows/ci.yml` runs lint, tests and the build on every pull request and on pushes to `main`.
 
 ## Deploying to GitHub Pages
 
