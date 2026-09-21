@@ -6,15 +6,41 @@ The interface is Swedish by default. Use the visible **Svenska / English** langu
 
 ## Local development
 
-Requirements: Node.js 18+ and npm.
+Requirements: Node.js 20+ and npm.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local URL shown by Vite. Validate a production build with `npm run build`; run the tests with `npm test -- --run`.
+Open the local URL shown by Vite. For normal app development, the service worker stays disabled in dev mode so cached assets do not interfere with iteration.
+
+Validate the production build and the generated PWA locally with:
+
+```bash
+npm run build
+npm run preview
+```
+
+Then open the preview URL in Chrome, Edge, or Safari and:
+
+1. confirm the app offers installation or **Add to Home Screen**
+2. load the app once while online so the shell and icons are cached
+3. switch the browser to offline mode and refresh to confirm the lesson and piano still open
+
+Run the tests with:
+
+```bash
+npm test
+```
+
+Notes:
+
+- Install prompts are browser-dependent. Chromium browsers show a native install UI; on iPhone/iPad, use Safari’s **Add to Home Screen** action.
+- The app itself works offline after the first production visit. Google Fonts are cached when available, but if a browser blocks or skips those requests the app falls back to system fonts without affecting piano/audio behavior.
 
 ## Deploying to GitHub Pages
 
-The included `.github/workflows/deploy.yml` builds and publishes on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**. Vite is configured with a relative base path, so the static app works for project pages and custom domains.
+The included `.github/workflows/deploy.yml` builds and publishes on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+
+The workflow builds the PWA with `VITE_BASE_PATH=/piano/` so the manifest scope, service worker, and asset URLs match this repository’s GitHub Pages project URL. If you later move the app to a custom domain or a different subpath, update that environment variable to the deployed root path (for example `/`).
