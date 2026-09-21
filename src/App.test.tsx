@@ -4,6 +4,7 @@ import App, { BLACK_KEYS, PITCHES, PITCH_INFO, resetAudioState } from './App'
 
 describe('Note Nest lesson', () => {
   const originalAudioContext = window.AudioContext
+  const originalWebkitAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
 
   beforeEach(() => {
     window.localStorage.clear()
@@ -14,6 +15,8 @@ describe('Note Nest lesson', () => {
     await resetAudioState()
     if (originalAudioContext) Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: originalAudioContext })
     else Reflect.deleteProperty(window, 'AudioContext')
+    if (originalWebkitAudioContext) Object.defineProperty(window, 'webkitAudioContext', { configurable: true, writable: true, value: originalWebkitAudioContext })
+    else Reflect.deleteProperty(window, 'webkitAudioContext')
   })
 
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
