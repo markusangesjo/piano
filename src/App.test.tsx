@@ -255,6 +255,12 @@ describe('Note Nest lesson', () => {
 
   it('shows the listening state after microphone access starts', async () => {
     const user = userEvent.setup()
+    const releaseWakeLock = vi.fn().mockResolvedValue(undefined)
+    const requestWakeLock = vi.fn().mockResolvedValue({ release: releaseWakeLock })
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request: requestWakeLock },
+    })
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
     vi.stubGlobal('AudioContext', class {
       state = 'running'
@@ -292,7 +298,10 @@ describe('Note Nest lesson', () => {
     await waitFor(() => {
       expect(screen.getByText('Mikrofonen lyssnar. Spela tonen på ditt piano.')).toBeInTheDocument()
     })
+    expect(requestWakeLock).toHaveBeenCalledWith('screen')
     expect(screen.getByRole('button', { name: 'Stoppa mikrofon' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Stoppa mikrofon' }))
+    expect(releaseWakeLock).toHaveBeenCalledTimes(1)
   })
 
   it('advances through microphone practice and finishes after the last correct pitch', async () => {

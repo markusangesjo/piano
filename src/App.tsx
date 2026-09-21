@@ -493,7 +493,6 @@ function App() {
     teardownMicrophone()
     const sessionId = microphoneSessionRef.current
     setMicStatus('requesting')
-    void requestWakeLock()
     setHeardPitch(null)
     setHeardCorrect(null)
 
@@ -527,6 +526,7 @@ function App() {
       audioContextRef.current = audioContext
       analyserRef.current = analyser
       setMicStatus('listening')
+      void requestWakeLock()
 
       const buffer = new Float32Array(analyser.fftSize)
       const listen = () => {
