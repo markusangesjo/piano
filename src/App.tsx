@@ -374,11 +374,13 @@ function App() {
   const [heardCorrect, setHeardCorrect] = useState<boolean | null>(null)
   const quizChoices = useMemo(() => [...PITCHES].sort(() => Math.random() - 0.5), [quizPitch])
   const currentPracticePitch = PRACTICE_SEQUENCE[practiceIndex]
+  const micStatusRef = useRef(micStatus)
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const advanceTimeoutRef = useRef<number | null>(null)
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const microphoneSessionRef = useRef(0)
   const lastMidiRef = useRef<number | null>(null)
   const stableFramesRef = useRef(0)
@@ -387,6 +389,7 @@ function App() {
   const practiceCompleteRef = useRef(practiceComplete)
   const matchedRef = useRef(false)
 
+  micStatusRef.current = micStatus
   useEffect(() => { try { window.localStorage.setItem(LANGUAGE_KEY, language) } catch { /* storage is optional */ } }, [language])
   useEffect(() => { setAnswer(null) }, [quizPitch])
   useEffect(() => { practiceIndexRef.current = practiceIndex }, [practiceIndex])
@@ -397,12 +400,38 @@ function App() {
       stopMicrophone('idle')
     }
   }, [tab, micStatus])
+  useEffect(() => {
+    const reacquireWakeLock = () => {
+      if (document.visibilityState === 'visible' && micStatusRef.current === 'listening') void requestWakeLock()
+    }
+    document.addEventListener('visibilitychange', reacquireWakeLock)
+    return () => {
+      document.removeEventListener('visibilitychange', reacquireWakeLock)
+      void releaseWakeLock()
+    }
+  }, [])
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     if (advanceTimeoutRef.current) window.clearTimeout(advanceTimeoutRef.current)
     streamRef.current?.getTracks().forEach((track) => track.stop())
     if (audioContextRef.current) void audioContextRef.current.close()
+    void releaseWakeLock()
   }, [])
+
+  const requestWakeLock = async () => {
+    if (!navigator.wakeLock || wakeLockRef.current || document.visibilityState !== 'visible') return
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen')
+    } catch {
+      // Wake Lock is optional and may be denied by the browser or device.
+    }
+  }
+
+  const releaseWakeLock = async () => {
+    const wakeLock = wakeLockRef.current
+    wakeLockRef.current = null
+    if (wakeLock) await wakeLock.release()
+  }
 
   const teardownMicrophone = () => {
     microphoneSessionRef.current += 1
@@ -413,6 +442,7 @@ function App() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     analyserRef.current = null
+    void releaseWakeLock()
     if (audioContextRef.current) void audioContextRef.current.close()
     audioContextRef.current = null
     lastMidiRef.current = null
@@ -463,6 +493,7 @@ function App() {
     teardownMicrophone()
     const sessionId = microphoneSessionRef.current
     setMicStatus('requesting')
+    void requestWakeLock()
     setHeardPitch(null)
     setHeardCorrect(null)
 
