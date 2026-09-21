@@ -18,6 +18,8 @@ export async function registerPWA(options: RegisterPWAOptions = {}) {
   try {
     const { registerSW } = await loadRegister()
     registerSW({ immediate: true })
+    const registration = await serviceWorker.ready
+    await registration.update()
 
     return true
   } catch {
