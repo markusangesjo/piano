@@ -25,14 +25,18 @@ describe('registerPWA', () => {
   it('registers the generated service worker immediately in production', async () => {
     const registerSW = vi.fn()
     const loadRegister = vi.fn().mockResolvedValue({ registerSW })
+    const update = vi.fn().mockResolvedValue(undefined)
 
     await expect(registerPWA({
       isProd: true,
-      serviceWorker: {} as ServiceWorkerContainer,
+      serviceWorker: {
+        ready: Promise.resolve({ update }),
+      } as unknown as ServiceWorkerContainer,
       loadRegister,
     })).resolves.toBe(true)
     expect(loadRegister).toHaveBeenCalledTimes(1)
     expect(registerSW).toHaveBeenCalledWith({ immediate: true })
+    expect(update).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed when the registration module cannot be loaded', async () => {
