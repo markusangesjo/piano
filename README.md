@@ -6,7 +6,7 @@ The interface is Swedish by default. Use the visible **Svenska / English** langu
 
 ## Local development
 
-Requirements: Node.js 18+ and npm.
+Requirements: Node.js 20+ and npm.
 
 ```bash
 npm install
