@@ -1,7 +1,8 @@
 name: CI / Deploy to GitHub Pages
 
-# One workflow for both jobs: every pull request gets the checks, and pushes to
-# main continue through the same run into the GitHub Pages deployment.
+# One workflow for both jobs: every pull request gets the linting, tests and
+# build, and pushes to main continue through the same run into the GitHub Pages
+# deployment.
 on:
   pull_request:
   push:
@@ -73,6 +74,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm test
       # Build with the production base path so pull requests validate the same
       # asset URLs and service-worker scope as the deployed site.
