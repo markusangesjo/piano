@@ -434,17 +434,19 @@ function App() {
   const chooseAnswer = (choice: PianoKey) => {
     if (!PITCHES.includes(choice as Pitch)) return
     const whiteChoice = choice as Pitch
-    setAnswer(whiteChoice)
     if (whiteChoice === quizPitch) {
       setStreak((s) => s + 1)
       void playTone(whiteChoice)
+      nextQuestion()
     } else {
       setStreak(0)
+      setAnswer(whiteChoice)
     }
   }
 
   const nextQuestion = () => {
-    setQuizPitch(quizChoices[Math.floor(Math.random() * quizChoices.length)])
+    const nextChoices = quizChoices.filter((choice) => choice !== quizPitch)
+    setQuizPitch(nextChoices[Math.floor(Math.random() * nextChoices.length)])
     setAnswer(null)
   }
 
@@ -616,7 +618,7 @@ function App() {
       <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
     </section> : tab === 'quiz' ? <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
-      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer ? (answer === quizPitch ? answer : quizPitch) : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className={`feedback ${answer === quizPitch ? 'correct' : 'oops'}`} role="status">{answer === quizPitch ? copy.nice(quizPitch) : copy.almost(answer)}</div>}</div>
+      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer === quizPitch ? answer : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
     </section> : <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.practiceLesson(practiceComplete ? PRACTICE_SEQUENCE.length : practiceIndex + 1, PRACTICE_SEQUENCE.length)}</p><h1>{copy.microphoneTitle}</h1><p className="lede">{copy.practiceLead}</p></div>
