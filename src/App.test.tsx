@@ -329,6 +329,50 @@ describe('Note Nest lesson', () => {
     expect(releaseWakeLock).toHaveBeenCalledTimes(1)
   })
 
+  it('starts microphone practice automatically when permission is already granted', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('AudioContext', class {
+      state = 'running'
+      resume() {
+        return Promise.resolve()
+      }
+      sampleRate = 44100
+      createAnalyser() {
+        return {
+          fftSize: 2048,
+          smoothingTimeConstant: 0,
+          getFloatTimeDomainData: vi.fn(),
+        }
+      }
+      createMediaStreamSource() {
+        return { connect: vi.fn() }
+      }
+      close() {
+        return Promise.resolve()
+      }
+    })
+    const getUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [{ stop: vi.fn() }],
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    })
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: vi.fn().mockResolvedValue({ state: 'granted' }) },
+    })
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /spela med mikrofon/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Mikrofonen lyssnar. Spela tonen på ditt piano.')).toBeInTheDocument()
+    })
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Stoppa mikrofon' })).toBeInTheDocument()
+  })
+
   it('advances through microphone practice and finishes after the last correct pitch', async () => {
     vi.useFakeTimers()
 

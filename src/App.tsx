@@ -758,6 +758,26 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (tab !== 'practice' && tab !== 'song' && tab !== 'debug') return
+    if (tab === 'song' && !selectedSongId) return
+
+    let cancelled = false
+    const startIfPermissionGranted = async () => {
+      if (!navigator.permissions?.query) return
+
+      try {
+        const permission = await navigator.permissions.query({ name: 'microphone' })
+        if (!cancelled && permission.state === 'granted') void startMicrophone(tab === 'debug')
+      } catch {
+        // Permission checks are optional; the button remains available as a fallback.
+      }
+    }
+
+    void startIfPermissionGranted()
+    return () => { cancelled = true }
+  }, [tab, selectedSongId])
+
   const microphoneMessage = micStatus === 'requesting'
     ? copy.microphoneWaiting
     : micStatus === 'listening'
