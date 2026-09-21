@@ -26,6 +26,17 @@ export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: numb
 
 export const getPitchInfo = (pitch: Pitch) => PITCH_INFO[pitch]
 export const pitchLabel = (pitch: Pitch) => pitch
+const BLACK_KEY_FREQUENCIES = new Map(BLACK_KEYS.map((key) => [key.id, key.frequency] as const))
+const ATTACK_TIME = 0.01
+const PEAK_TIME = 0.08
+const RELEASE_TIME = 1.2
+const MASTER_VOLUME = 0.9
+
+type BrowserAudioContext = typeof AudioContext
+type AudioContextWindow = typeof window & { webkitAudioContext?: BrowserAudioContext }
+
+let audioContext: AudioContext | null = null
+let masterOutput: GainNode | null = null
 
 const COPY = {
   sv: {
@@ -62,22 +73,74 @@ const COPY = {
   },
 } as const
 
+const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch) ?? 0
+
+function getAudioContext() {
+  if (audioContext) return audioContext
+  const AudioContextClass = window.AudioContext || (window as AudioContextWindow).webkitAudioContext
+  if (!AudioContextClass) return null
+  audioContext = new AudioContextClass()
+  return audioContext
+}
+
+function getMasterOutput(context: AudioContext) {
+  if (masterOutput) return masterOutput
+
+  const compressor = context.createDynamicsCompressor()
+  compressor.threshold.value = -18
+  compressor.knee.value = 18
+  compressor.ratio.value = 3
+  compressor.attack.value = 0.003
+  compressor.release.value = 0.2
+
+  const gain = context.createGain()
+  gain.gain.value = MASTER_VOLUME
+
+  compressor.connect(gain).connect(context.destination)
+  masterOutput = gain
+  return masterOutput
+}
+
 function playTone(pitch: PianoKey) {
   try {
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) return
-    const context = new AudioContextClass()
-    const osc = context.createOscillator()
-    const gain = context.createGain()
-    osc.frequency.value = pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEYS.find((key) => key.id === pitch)?.frequency ?? 0
-    osc.type = 'sine'
-    gain.gain.setValueAtTime(0.0001, context.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.24, context.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.65)
-    osc.connect(gain).connect(context.destination)
-    osc.start()
-    osc.stop(context.currentTime + 0.7)
-    osc.addEventListener('ended', () => void context.close())
+    const context = getAudioContext()
+    if (!context) return
+    if (context.state === 'suspended') void context.resume()
+
+    const frequency = getFrequency(pitch)
+    const now = context.currentTime
+    const releaseAt = now + RELEASE_TIME
+    const voiceMix = context.createGain()
+    const filter = context.createBiquadFilter()
+
+    filter.type = 'lowpass'
+    filter.frequency.setValueAtTime(4200, now)
+    filter.frequency.exponentialRampToValueAtTime(1800, releaseAt)
+    filter.Q.value = 0.9
+
+    voiceMix.gain.setValueAtTime(0.0001, now)
+    voiceMix.gain.exponentialRampToValueAtTime(0.42, now + ATTACK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.26, now + PEAK_TIME)
+    voiceMix.gain.exponentialRampToValueAtTime(0.0001, releaseAt)
+
+    ;[
+      { type: 'triangle' as OscillatorType, multiple: 1, level: 0.85, detune: 0 },
+      { type: 'sine' as OscillatorType, multiple: 2, level: 0.22, detune: 3 },
+      { type: 'sine' as OscillatorType, multiple: 3, level: 0.12, detune: -2 },
+    ].forEach(({ type, multiple, level, detune }) => {
+      const osc = context.createOscillator()
+      const partialGain = context.createGain()
+      osc.type = type
+      osc.frequency.setValueAtTime(frequency * 1.003 * multiple, now)
+      osc.frequency.exponentialRampToValueAtTime(frequency * multiple, now + 0.03)
+      osc.detune.value = detune
+      partialGain.gain.value = level
+      osc.connect(partialGain).connect(voiceMix)
+      osc.start(now)
+      osc.stop(releaseAt + 0.05)
+    })
+
+    voiceMix.connect(filter).connect(getMasterOutput(context))
   } catch { /* sound is a lovely extra, never a requirement */ }
 }
 

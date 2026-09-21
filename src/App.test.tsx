@@ -3,8 +3,15 @@ import userEvent from '@testing-library/user-event'
 import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
 
 describe('Note Nest lesson', () => {
+  const originalAudioContext = window.AudioContext
+
   beforeEach(() => {
     window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    if (originalAudioContext) window.AudioContext = originalAudioContext
+    else delete (window as typeof window & { AudioContext?: typeof AudioContext }).AudioContext
   })
 
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
@@ -79,5 +86,56 @@ describe('Note Nest lesson', () => {
     await user.click(screen.getByRole('button', { name: 'Spela A4' }))
     expect(screen.getByRole('button', { name: 'Spela E4' })).toHaveClass('active')
     expect(screen.getByRole('button', { name: 'Spela A4' })).not.toHaveClass('active')
+  })
+
+  it('builds a fuller audio chain when a key is played', async () => {
+    const user = userEvent.setup()
+    const createOscillator = vi.fn(() => ({
+      type: 'sine',
+      frequency: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      detune: { value: 0 },
+      connect: vi.fn(function connect() { return this }),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }))
+    const createGain = vi.fn(() => ({
+      gain: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      connect: vi.fn(function connect() { return this }),
+    }))
+    const createBiquadFilter = vi.fn(() => ({
+      type: 'lowpass',
+      frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+      Q: { value: 0 },
+      connect: vi.fn(function connect() { return this }),
+    }))
+    const createDynamicsCompressor = vi.fn(() => ({
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+      connect: vi.fn(function connect() { return this }),
+    }))
+
+    class MockAudioContext {
+      currentTime = 0
+      state: AudioContextState = 'running'
+      destination = {}
+      resume = vi.fn(async () => undefined)
+      createOscillator = createOscillator
+      createGain = createGain
+      createBiquadFilter = createBiquadFilter
+      createDynamicsCompressor = createDynamicsCompressor
+    }
+
+    window.AudioContext = MockAudioContext as unknown as typeof AudioContext
+
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: 'Spela C4, mitt-C' }))
+
+    expect(createOscillator).toHaveBeenCalledTimes(3)
+    expect(createGain).toHaveBeenCalledTimes(5)
+    expect(createBiquadFilter).toHaveBeenCalledTimes(1)
+    expect(createDynamicsCompressor).toHaveBeenCalledTimes(1)
   })
 })
