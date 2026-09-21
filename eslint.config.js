@@ -5,7 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**'] },
+  // .agents holds vendored agent tooling (browser automation scripts and a
+  // bundled UMD build) that is not part of the app and is not written against
+  // these rules, so it is kept out of the lint run.
+  { ignores: ['dist/**', 'node_modules/**', '.agents/**'] },
   {
     files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     extends: [js.configs.recommended],
