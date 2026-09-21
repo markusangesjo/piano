@@ -7,11 +7,11 @@ describe('Note Nest lesson', () => {
 
   beforeEach(() => {
     window.localStorage.clear()
-    resetAudioState()
+    return resetAudioState()
   })
 
-  afterEach(() => {
-    resetAudioState()
+  afterEach(async () => {
+    await resetAudioState()
     if (originalAudioContext) Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: originalAudioContext })
     else Reflect.deleteProperty(window, 'AudioContext')
   })
@@ -124,6 +124,7 @@ describe('Note Nest lesson', () => {
       state: AudioContextState = 'running'
       destination = {}
       resume = vi.fn(async () => undefined)
+      close = vi.fn(async () => undefined)
       createOscillator = createOscillator
       createGain = createGain
       createBiquadFilter = createBiquadFilter
@@ -184,6 +185,7 @@ describe('Note Nest lesson', () => {
       state: AudioContextState = 'suspended'
       destination = {}
       resume = resume
+      close = vi.fn(async () => undefined)
       createOscillator = createOscillator
       createGain = createGain
       createBiquadFilter = createBiquadFilter

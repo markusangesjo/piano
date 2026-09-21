@@ -73,7 +73,7 @@ const COPY = {
   },
 } as const
 
-const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch as BlackKey) ?? 0
+const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch as BlackKey) ?? null
 
 function getAudioContext() {
   if (audioContext) return audioContext
@@ -101,9 +101,11 @@ function getMasterOutput(context: AudioContext) {
   return masterOutput
 }
 
-export function resetAudioState() {
+export async function resetAudioState() {
+  const context = audioContext
   audioContext = null
   masterOutput = null
+  if (context && context.state !== 'closed') await context.close()
 }
 
 async function playTone(pitch: PianoKey) {
@@ -113,6 +115,7 @@ async function playTone(pitch: PianoKey) {
     if (context.state === 'suspended') await context.resume()
 
     const frequency = getFrequency(pitch)
+    if (!frequency) return
     const now = context.currentTime
     const releaseAt = now + RELEASE_TIME
     const voiceMix = context.createGain()
