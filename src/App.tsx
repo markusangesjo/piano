@@ -863,7 +863,6 @@ function App() {
             <button className="secondary" type="button" onClick={() => { stopMicrophone('idle'); restartPractice() }}>{restartLabel}</button>
           </div>
         </div>
-        </div>
       </>}
     </section>}
     <footer>{copy.footer} <span>·</span> <span>{copy.version(`v${APP_VERSION}`)}</span></footer>
