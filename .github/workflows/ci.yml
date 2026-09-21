@@ -1,14 +1,72 @@
-name: CI
+name: CI / Deploy to GitHub Pages
+
+# One workflow for both jobs: every pull request gets the linting, tests and
+# build, and pushes to main continue through the same run into the GitHub Pages
+# deployment.
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+
+# Read-only by default; only the jobs that publish elevate their permissions.
 permissions:
   contents: read
+
+# A new push to the same branch or pull request makes the previous run obsolete.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  version:
+    name: Resolve version
     runs-on: ubuntu-24.04
+    # The release tag is pushed when a commit lands on main, which needs write access.
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          package_version=$(node -p "require('./package.json').version")
+          existing_tag=$(git tag --points-at "$SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)
+
+          if [ -n "$existing_tag" ]; then
+            version="${existing_tag#v}"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+            base_version="${latest_tag#v}"
+            base_version="${base_version:-$package_version}"
+            version=$(node -e "const [major, minor, patch] = process.argv[1].split('.').map(Number); console.log([major, minor, patch + 1].join('.'))" "$base_version")
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$version" "$SHA" -m "Release v$version"
+            git push origin "v$version"
+          else
+            # Pull requests and manual runs only need a version to display.
+            version="$package_version"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Checks and build
+    runs-on: ubuntu-24.04
+    needs: version
+    permissions:
+      contents: read
+      # configure-pages and upload-pages-artifact read the Pages settings and
+      # publish the build output, which the deploy job below then releases.
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -18,4 +76,37 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # Build with the production base path so pull requests validate the same
+      # asset URLs and service-worker scope as the deployed site.
       - run: npm run build
+        env:
+          VITE_BASE_PATH: /piano/
+          VITE_APP_VERSION: ${{ needs.version.outputs.version }}
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    # Pull requests stop after the checks above; they never publish.
+    if: github.event_name != 'pull_request'
+    needs: checks
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    # Queue behind an in-flight deployment instead of cancelling it halfway.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
