@@ -222,6 +222,7 @@ function detectPitch(buffer: Float32Array, sampleRate: number) {
       normB += b * b
     }
 
+    if (!normA || !normB) continue
     const normalized = correlation / Math.sqrt(normA * normB)
     if (normalized > bestCorrelation) {
       bestCorrelation = normalized
@@ -384,6 +385,7 @@ function App() {
         return
       }
       const audioContext = new AudioContextClass()
+      if (audioContext.state === 'suspended') await audioContext.resume()
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 2048
       analyser.smoothingTimeConstant = 0.2

@@ -122,6 +122,10 @@ describe('Note Nest lesson', () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 1)
     vi.stubGlobal('AudioContext', class {
+      state = 'running'
+      resume() {
+        return Promise.resolve()
+      }
       sampleRate = 44100
       createAnalyser() {
         return {
@@ -171,6 +175,10 @@ describe('Note Nest lesson', () => {
       rafCallback = null
     })
     vi.stubGlobal('AudioContext', class {
+      state = 'running'
+      resume() {
+        return Promise.resolve()
+      }
       sampleRate = 44100
       createAnalyser() {
         return {
