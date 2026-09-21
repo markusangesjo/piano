@@ -1,18 +1,29 @@
-name: Deploy to GitHub Pages
+name: CI / Deploy to GitHub Pages
+
+# One workflow for both jobs: every pull request gets the checks, and pushes to
+# main continue through the same run into the GitHub Pages deployment.
 on:
+  pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+
+# Read-only by default; only the jobs that publish elevate their permissions.
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
+
+# A new push to the same branch or pull request makes the previous run obsolete.
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   version:
+    name: Resolve version
     runs-on: ubuntu-24.04
+    # The release tag is pushed when a commit lands on main, which needs write access.
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -39,13 +50,22 @@ jobs:
             git tag -a "v$version" "$SHA" -m "Release v$version"
             git push origin "v$version"
           else
+            # Pull requests and manual runs only need a version to display.
             version="$package_version"
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
-  build:
+
+  checks:
+    name: Checks and build
     runs-on: ubuntu-24.04
     needs: version
+    permissions:
+      contents: read
+      # configure-pages and upload-pages-artifact read the Pages settings and
+      # publish the build output, which the deploy job below then releases.
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -53,20 +73,38 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm test
+      # Build with the production base path so pull requests validate the same
+      # asset URLs and service-worker scope as the deployed site.
       - run: npm run build
         env:
           VITE_BASE_PATH: /piano/
           VITE_APP_VERSION: ${{ needs.version.outputs.version }}
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./dist
+
   deploy:
+    name: Deploy to GitHub Pages
+    # Pull requests stop after the checks above; they never publish.
+    if: github.event_name != 'pull_request'
+    needs: checks
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    # Queue behind an in-flight deployment instead of cancelling it halfway.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-24.04
-    needs: build
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5

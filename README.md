@@ -39,8 +39,18 @@ Notes:
 - Install prompts are browser-dependent. Chromium browsers show a native install UI; on iPhone/iPad, use Safari’s **Add to Home Screen** action.
 - The app itself works offline after the first production visit. Google Fonts are cached when available, but if a browser blocks or skips those requests the app falls back to system fonts without affecting piano/audio behavior.
 
+## Checks and deployment
+
+`.github/workflows/ci.yml` is a single workflow that both verifies pull requests and publishes `main`:
+
+1. **Resolve version** reads the release tag for the commit, or creates and pushes the next patch tag when a commit lands on `main`.
+2. **Checks and build** runs `npm ci`, `npm test` and `npm run build` (with `VITE_BASE_PATH=/piano/` and the resolved version) on every pull request and on pushes to `main`.
+3. On pushes to `main` (or a manual run) the same job uploads the build output as a GitHub Pages artifact, and **Deploy to GitHub Pages** publishes it to the `github-pages` environment.
+
+Pull requests only run the checks: the Pages and deploy steps are skipped, so a pull request can never publish to the live site.
+
 ## Deploying to GitHub Pages
 
-The included `.github/workflows/deploy.yml` builds and publishes on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
+Publishing happens from `.github/workflows/ci.yml` on pushes to `main`. In the repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**.
 
 The workflow builds the PWA with `VITE_BASE_PATH=/piano/` so the manifest scope, service worker, and asset URLs match this repository’s GitHub Pages project URL. If you later move the app to a custom domain or a different subpath, update that environment variable to the deployed root path (for example `/`).
