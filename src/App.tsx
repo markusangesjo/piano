@@ -18,7 +18,15 @@ type MicrophoneStatus = 'idle' | 'requesting' | 'listening' | 'unsupported' | 'd
 const LANGUAGE_KEY = 'note-nest-language'
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
-const SONG_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
+const TWINKLE_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
+const SPAIN_SEQUENCE = ['C4', 'D4', 'E4', 'F4', 'G4', 'G4', 'F4', 'E4', 'D4', 'C4', 'D4', 'C4'] as const
+const UPCOMING_NOTES_SHOWN = 4
+type SongId = 'twinkle' | 'spain'
+type SongDefinition = { id: SongId; sequence: readonly Pitch[]; title: Record<Language, string> }
+const SONGS: readonly SongDefinition[] = [
+  { id: 'twinkle', sequence: TWINKLE_SEQUENCE, title: { sv: 'Blinka lilla stjärna', en: 'Twinkle Twinkle Little Star' } },
+  { id: 'spain', sequence: SPAIN_SEQUENCE, title: { sv: 'Spanien är ett land', en: 'Spain Is a Country' } },
+]
 const PITCH_TO_MIDI: Record<Pitch, number> = { C4: 60, D4: 62, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
 const MIDI_LABELS: Record<number, string> = {
   60: 'C4',
@@ -73,14 +81,15 @@ const COPY = {
     learn: 'Lär dig en ton',
     quiz: 'Snabbquiz',
     practice: 'Spela med mikrofon',
-    song: 'Blinka lilla stjärna',
+    song: 'Låtar',
+    chooseSong: 'Välj en låt att öva på',
     lesson: 'LEKTION 01 · DISKANTKLAVEN',
     practiceLesson: (step: number, total: number) => `GUIDAD ÖVNING · STEG ${step} AV ${total}`,
-    songLesson: (step: number, total: number) => `BLINKA LILLA STJÄRNA · NOT ${step} AV ${total}`,
+    songLesson: (title: string, step: number, total: number) => `${title.toUpperCase()} · NOT ${step} AV ${total}`,
     meet: 'Möt dina ',
     note: 'tonvänner.',
     practiceLead: 'Låt mobilen lyssna medan du spelar samma ton på ett riktigt piano nära mikrofonen.',
-    songTitle: 'Spela Blinka lilla stjärna',
+    songTitle: (title: string) => `Spela ${title}`,
     songLead: 'Följ noterna en i taget. Appen lyssnar och går vidare när du spelar rätt ton.',
     lessonIntro: 'Lär dig hitta tonerna C4–C5 på diskantklavens notlinjer och pianot.',
     every: 'Varje ton har ett namn',
@@ -129,7 +138,7 @@ const COPY = {
     restartPractice: 'Börja om övningen',
     songIntro: 'Spela melodin på ditt riktiga piano. Börja med tonen som visas på notlinjerna.',
     songTarget: (n: Pitch) => `Spela nästa ton: ${n}`,
-    songCompleted: '🎉 Du spelade hela Blinka lilla stjärna!',
+    songCompleted: (title: string) => `🎉 Du spelade hela ${title}!`,
     restartSong: 'Börja om låten',
     footer: <>Gjord för nyfikna öron <span>·</span> Inga fel toner här 🎵</>,
     version: (version: string) => `Version ${version}`,
@@ -146,14 +155,15 @@ const COPY = {
     learn: 'Learn a pitch',
     quiz: 'Quick quiz',
     practice: 'Play with microphone',
-    song: 'Twinkle Twinkle Little Star',
+    song: 'Songs',
+    chooseSong: 'Choose a song to practice',
     lesson: 'LESSON 01 · TREBLE CLEF',
     practiceLesson: (step: number, total: number) => `GUIDED PRACTICE · STEP ${step} OF ${total}`,
-    songLesson: (step: number, total: number) => `TWINKLE TWINKLE · NOTE ${step} OF ${total}`,
+    songLesson: (title: string, step: number, total: number) => `${title.toUpperCase()} · NOTE ${step} OF ${total}`,
     meet: 'Meet your ',
     note: 'pitch friends.',
     practiceLead: 'Let the device listen while you play the same pitch on a real piano near the microphone.',
-    songTitle: 'Play Twinkle Twinkle Little Star',
+    songTitle: (title: string) => `Play ${title}`,
     songLead: 'Follow the notes one at a time. The app listens and moves on when you play the right pitch.',
     lessonIntro: 'Learn to find pitches C4–C5 on the treble staff and piano.',
     every: 'Every pitch has a name',
@@ -202,7 +212,7 @@ const COPY = {
     restartPractice: 'Restart practice',
     songIntro: 'Play the melody on your real piano. Start with the note shown on the staff.',
     songTarget: (n: Pitch) => `Play the next note: ${n}`,
-    songCompleted: '🎉 You played the whole Twinkle Twinkle Little Star!',
+    songCompleted: (title: string) => `🎉 You played the whole ${title}!`,
     restartSong: 'Restart song',
     footer: <>Made for curious ears <span>·</span> No wrong notes here 🎵</>,
     version: (version: string) => `Version ${version}`,
@@ -385,17 +395,26 @@ function frequencyToMidi(frequency: number) {
   return Math.round(69 + 12 * Math.log2(frequency / 440))
 }
 
-function Staff({ pitch, copy }: { pitch: Pitch; copy: typeof COPY[Language] }) {
-  const info = PITCH_INFO[pitch]
+function Staff({ pitch, copy, upcoming = [] }: { pitch: Pitch; copy: typeof COPY[Language]; upcoming?: readonly Pitch[] }) {
+  const notes = [pitch, ...upcoming]
+  const startX = 150
+  const spacing = 60
   return <div className="staff-wrap" aria-label={copy.staff(pitch)}>
     <svg className="staff" viewBox="0 0 500 180" role="img">
       <title>{copy.titleStaff(pitch)}</title>
       <text x="26" y="116" className="clef">𝄞</text>
       {[50, 70, 90, 110, 130].map((y) => <line key={y} x1="92" y1={y} x2="472" y2={y} className="staff-line" />)}
-      {pitch === 'C4' && <line x1="257" y1="150" x2="303" y2="150" className="ledger-line" />}
-      <ellipse cx="280" cy={info.y} rx="17" ry="12" fill={info.color} className="note-head" />
-      <line x1="296" y1={info.y} x2="296" y2={info.y - 51} className="stem" />
-      <circle cx="274" cy={info.y - 4} r="3" fill="white" opacity=".75" />
+      {notes.map((n, index) => {
+        const info = PITCH_INFO[n]
+        const cx = startX + index * spacing
+        const isCurrent = index === 0
+        return <g key={`${n}-${index}`} className={isCurrent ? 'note-group current' : 'note-group upcoming'} opacity={isCurrent ? 1 : Math.max(0.35, 0.75 - index * 0.15)}>
+          {n === 'C4' && <line x1={cx - 23} y1="150" x2={cx + 23} y2="150" className="ledger-line" />}
+          <ellipse cx={cx} cy={info.y} rx={isCurrent ? 17 : 12} ry={isCurrent ? 12 : 9} fill={info.color} className="note-head" />
+          {isCurrent && <line x1={cx + 16} y1={info.y} x2={cx + 16} y2={info.y - 51} className="stem" />}
+          {isCurrent && <circle cx={cx - 6} cy={info.y - 4} r="3" fill="white" opacity=".75" />}
+        </g>
+      })}
     </svg>
   </div>
 }
