@@ -3,7 +3,7 @@ import { playTone } from './audio'
 import { Piano } from './components/Piano'
 import { Staff } from './components/Staff'
 import { COPY } from './copy'
-import { PITCHES, PITCH_INFO, PITCH_TO_MIDI, PRACTICE_SEQUENCE, pitchLabel, type PianoKey, type Pitch } from './pitch'
+import { PITCHES, PITCH_INFO, PITCH_TO_MIDI, PRACTICE_SEQUENCE, isWhiteKey, pianoKeyLabel, pitchLabel, type PianoKey, type Pitch } from './pitch'
 import { SONGS, type SongId } from './songs'
 import type { Language, Tab } from './types'
 import { useMicrophone } from './useMicrophone'
@@ -33,7 +33,7 @@ function App() {
   const [pitch, setPitch] = useState<Pitch>('C4')
   const [selectedKey, setSelectedKey] = useState<PianoKey>('C4')
   const [quizPitch, setQuizPitch] = useState<Pitch>('E4')
-  const [answer, setAnswer] = useState<Pitch | null>(null)
+  const [answer, setAnswer] = useState<PianoKey | null>(null)
   const [streak, setStreak] = useState(0)
   const [selectedSongId, setSelectedSongId] = useState<SongId | null>(null)
   const [practiceIndex, setPracticeIndex] = useState(0)
@@ -101,15 +101,22 @@ function App() {
   }
 
   const chooseAnswer = (choice: PianoKey) => {
-    if (!PITCHES.includes(choice as Pitch)) return
-    const whiteChoice = choice as Pitch
-    if (whiteChoice === quizPitch) {
+    // The quiz keyboard shows the black keys too so that it looks like a real
+    // piano, but the questions stay inside the eight white notes from the
+    // lesson. A black key is therefore never the answer: it gets its own nudge
+    // instead of the regular "almost" feedback.
+    if (!isWhiteKey(choice)) {
+      setStreak(0)
+      setAnswer(choice)
+      return
+    }
+    if (choice === quizPitch) {
       setStreak((s) => s + 1)
-      void playTone(whiteChoice)
+      void playTone(choice)
       nextQuestion()
     } else {
       setStreak(0)
-      setAnswer(whiteChoice)
+      setAnswer(choice)
     }
   }
 
@@ -203,13 +210,14 @@ function App() {
       <div className="intro"><p className="eyebrow">{copy.lesson}</p><h1>{copy.meet}<em>{copy.note}</em></h1><p className="lede">{copy.lessonIntro}</p></div>
       <div className="lesson-card"><div className="card-copy"><span className="step">1</span><div><h2>{copy.every}</h2><p>{copy.seven}<strong>C4, D4, E4, F4, G4, A4, B4, C5.</strong> {copy.repeat}</p></div></div><div className="letter-row" aria-label={copy.names}>{PITCHES.map((p) => <button key={p} className={pitch === p ? 'letter active' : 'letter'} style={{ '--note-color': PITCH_INFO[p].color } as React.CSSProperties} onClick={() => { setPitch(p); setSelectedKey(p); void playTone(p) }} aria-label={copy.choose(p)}><span>{pitchLabel(p)}</span><small>{p === 'C4' ? (language === 'sv' ? 'mitt-C' : 'middle C') : `${PITCH_INFO[p].letter}${PITCH_INFO[p].octave}`}</small></button>)}</div></div>
       <div className="lesson-card staff-card"><div className="card-copy"><span className="step">2</span><div><h2>{copy.spot}</h2><p>{copy.map}</p></div></div><Staff pitch={pitch} copy={copy} /><div className="note-caption" style={{ '--note-color': PITCH_INFO[pitch].color } as React.CSSProperties}><span className="caption-dot" />{copy.thisNote(pitch)}</div></div>
-      <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={selectedKey} onPick={(key) => { setSelectedKey(key); if (PITCHES.includes(key as Pitch)) setPitch(key as Pitch) }} copy={copy} /></div>
+      <div className="lesson-card keyboard-card"><div className="card-copy"><span className="step">3</span><div><h2>{copy.play}</h2><p>{copy.tap}</p></div></div><Piano active={selectedKey} onPick={(key) => { setSelectedKey(key); if (isWhiteKey(key)) setPitch(key) }} copy={copy} /></div>
       <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
     </section> : tab === 'quiz' ? <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
       {/* The quiz never highlights a key — not even the one that was tapped —
-          so the learner has to read the note on the staff instead. */}
-      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{copy.almost(answer)}</div>}</div>
+          so the learner has to read the note on the staff instead. The
+          keyboard still shows the black keys, so it looks like a real piano. */}
+      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={null} onPick={chooseAnswer} copy={copy} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className="feedback oops" role="status">{isWhiteKey(answer) ? copy.almost(answer) : copy.blackKeyAttempt(pianoKeyLabel(answer))}</div>}</div>
       {answer && <button className="primary" onClick={retryQuestion}>{copy.another} <span>→</span></button>}
     </section> : tab === 'debug' ? <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.debugEyebrow}</p><h1>{copy.debugTitle}</h1><p className="lede">{copy.debugLead}</p></div>
