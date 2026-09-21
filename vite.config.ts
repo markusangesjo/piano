@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 function normalizeBasePath(basePath: string) {
+  if (basePath === '.' || basePath === './') return '/'
   const withLeadingSlash = basePath.startsWith('/') ? basePath : `/${basePath}`
   return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`
 }
@@ -36,7 +37,7 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
-          navigateFallback: 'index.html',
+          navigateFallback: `${basePath}index.html`,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
