@@ -11,7 +11,7 @@ type RegisterPWAOptions = {
 export async function registerPWA(options: RegisterPWAOptions = {}) {
   const isProd = options.isProd ?? import.meta.env.PROD
   const serviceWorker = options.serviceWorker ?? (typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined)
-  const loadRegister = options.loadRegister ?? (() => new Function('return import("virtual:pwa-register")')() as Promise<RegisterSWModule>)
+  const loadRegister = options.loadRegister ?? (() => import('virtual:pwa-register'))
 
   if (!isProd || !serviceWorker) return false
 
