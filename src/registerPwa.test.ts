@@ -44,4 +44,18 @@ describe('registerPWA', () => {
       loadRegister,
     })).resolves.toBe(false)
   })
+
+  it('fails closed when registerSW throws after loading', async () => {
+    const loadRegister = vi.fn().mockResolvedValue({
+      registerSW: vi.fn(() => {
+        throw new Error('boom')
+      }),
+    })
+
+    await expect(registerPWA({
+      isProd: true,
+      serviceWorker: {} as ServiceWorkerContainer,
+      loadRegister,
+    })).resolves.toBe(false)
+  })
 })
