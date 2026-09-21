@@ -252,10 +252,21 @@ describe('Note Nest lesson', () => {
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: 'Låtar' }))
-    await user.click(screen.getByRole('button', { name: 'Spanien är ett land' }))
+    await user.click(screen.getByRole('button', { name: 'Spanien är ett land där man dansar tango' }))
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Spela Spanien är ett land' })).toBeInTheDocument()
-    expect(screen.getByText('SPANIEN ÄR ETT LAND · NOT 1 AV 12')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Spanien är ett land där man dansar tango' })).toBeInTheDocument()
+    expect(screen.getByText('SPANIEN ÄR ETT LAND DÄR MAN DANSAR TANGO · NOT 1 AV 42')).toBeInTheDocument()
+  })
+
+  it('lets players choose the Für Elise song too', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Låtar' }))
+    await user.click(screen.getByRole('button', { name: 'Für Elise' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Für Elise' })).toBeInTheDocument()
+    expect(screen.getByText('FÜR ELISE · NOT 1 AV 21')).toBeInTheDocument()
   })
 
   it('shows a helpful message when microphone permission is denied', async () => {

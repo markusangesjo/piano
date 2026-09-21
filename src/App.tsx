@@ -19,14 +19,16 @@ const LANGUAGE_KEY = 'note-nest-language'
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.1.0'
 const PRACTICE_SEQUENCE = [...PITCHES] as const
 const TWINKLE_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
-const SPAIN_SEQUENCE = ['C4', 'D4', 'E4', 'F4', 'G4', 'G4', 'F4', 'E4', 'D4', 'C4', 'D4', 'C4'] as const
+const SPAIN_SEQUENCE = TWINKLE_SEQUENCE
+const ELISE_SEQUENCE = ['A4', 'G4', 'A4', 'G4', 'A4', 'E4', 'G4', 'F4', 'D4', 'D4', 'F4', 'A4', 'B4', 'E4', 'G4', 'B4', 'C5', 'E4', 'C5', 'B4', 'A4'] as const
 const UPCOMING_NOTES_SHOWN = 4
 const DEBUG_FEEDBACK_TIMEOUT_MS = 3000
-type SongId = 'twinkle' | 'spain'
+type SongId = 'twinkle' | 'spain' | 'elise'
 type SongDefinition = { id: SongId; sequence: readonly Pitch[]; title: Record<Language, string> }
 const SONGS: readonly SongDefinition[] = [
   { id: 'twinkle', sequence: TWINKLE_SEQUENCE, title: { sv: 'Blinka lilla stjärna', en: 'Twinkle Twinkle Little Star' } },
-  { id: 'spain', sequence: SPAIN_SEQUENCE, title: { sv: 'Spanien är ett land', en: 'Spain Is a Country' } },
+  { id: 'spain', sequence: SPAIN_SEQUENCE, title: { sv: 'Spanien är ett land där man dansar tango', en: 'Spain Is a Country Where You Dance Tango' } },
+  { id: 'elise', sequence: ELISE_SEQUENCE, title: { sv: 'Für Elise', en: 'Für Elise' } },
 ]
 const PITCH_TO_MIDI: Record<Pitch, number> = { C4: 60, D4: 62, E4: 64, F4: 65, G4: 67, A4: 69, B4: 71, C5: 72 }
 const MIDI_LABELS: Record<number, string> = {
