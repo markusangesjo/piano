@@ -21,6 +21,7 @@ const PRACTICE_SEQUENCE = [...PITCHES] as const
 const TWINKLE_SEQUENCE = ['C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'] as const
 const SPAIN_SEQUENCE = ['C4', 'D4', 'E4', 'F4', 'G4', 'G4', 'F4', 'E4', 'D4', 'C4', 'D4', 'C4'] as const
 const UPCOMING_NOTES_SHOWN = 4
+const DEBUG_FEEDBACK_TIMEOUT_MS = 3000
 type SongId = 'twinkle' | 'spain'
 type SongDefinition = { id: SongId; sequence: readonly Pitch[]; title: Record<Language, string> }
 const SONGS: readonly SongDefinition[] = [
@@ -526,6 +527,7 @@ function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const rafRef = useRef<number | null>(null)
   const advanceTimeoutRef = useRef<number | null>(null)
+  const debugClearTimeoutRef = useRef<number | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const microphoneSessionRef = useRef(0)
   const lastMidiRef = useRef<number | null>(null)
@@ -560,6 +562,7 @@ function App() {
   useEffect(() => () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current)
     if (advanceTimeoutRef.current) window.clearTimeout(advanceTimeoutRef.current)
+    if (debugClearTimeoutRef.current) window.clearTimeout(debugClearTimeoutRef.current)
     streamRef.current?.getTracks().forEach((track) => track.stop())
     if (audioContextRef.current) void audioContextRef.current.close()
     void releaseWakeLock()
@@ -586,6 +589,8 @@ function App() {
     rafRef.current = null
     if (advanceTimeoutRef.current) window.clearTimeout(advanceTimeoutRef.current)
     advanceTimeoutRef.current = null
+    if (debugClearTimeoutRef.current) window.clearTimeout(debugClearTimeoutRef.current)
+    debugClearTimeoutRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     analyserRef.current = null
@@ -714,15 +719,24 @@ function App() {
         if (!detection) {
           stableFramesRef.current = 0
           lastMidiRef.current = null
-          // Debug mode keeps showing the last reading instead of clearing it,
-          // since real playing has brief silences between notes and there's
-          // rarely time to read the details before they vanish.
-          if (debugModeRef.current) setDebugUnstable(null)
+          if (debugModeRef.current) {
+            setDebugUnstable(null)
+            if (!debugClearTimeoutRef.current) {
+              debugClearTimeoutRef.current = window.setTimeout(() => {
+                setDebugInfo(null)
+                debugClearTimeoutRef.current = null
+              }, DEBUG_FEEDBACK_TIMEOUT_MS)
+            }
+          }
           rafRef.current = requestAnimationFrame(listen)
           return
         }
 
         const { frequency, clarity, rms } = detection
+        if (debugClearTimeoutRef.current) {
+          window.clearTimeout(debugClearTimeoutRef.current)
+          debugClearTimeoutRef.current = null
+        }
         const midi = frequencyToMidi(frequency)
         const label = debugModeRef.current ? midiToNoteLabel(midi) : MIDI_LABELS[midi]
 
