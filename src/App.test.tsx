@@ -11,7 +11,7 @@ describe('Note Nest lesson', () => {
 
   afterEach(() => {
     if (originalAudioContext) window.AudioContext = originalAudioContext
-    else delete (window as typeof window & { AudioContext?: typeof AudioContext }).AudioContext
+    else (window as typeof window & { AudioContext?: typeof AudioContext }).AudioContext = undefined
   })
 
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
@@ -94,19 +94,19 @@ describe('Note Nest lesson', () => {
       type: 'sine',
       frequency: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
       detune: { value: 0 },
-      connect: vi.fn(function connect() { return this }),
+      connect: vi.fn(function connect(this: object) { return this }),
       start: vi.fn(),
       stop: vi.fn(),
     }))
     const createGain = vi.fn(() => ({
       gain: { value: 0, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
-      connect: vi.fn(function connect() { return this }),
+      connect: vi.fn(function connect(this: object) { return this }),
     }))
     const createBiquadFilter = vi.fn(() => ({
       type: 'lowpass',
       frequency: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
       Q: { value: 0 },
-      connect: vi.fn(function connect() { return this }),
+      connect: vi.fn(function connect(this: object) { return this }),
     }))
     const createDynamicsCompressor = vi.fn(() => ({
       threshold: { value: 0 },
@@ -114,7 +114,7 @@ describe('Note Nest lesson', () => {
       ratio: { value: 0 },
       attack: { value: 0 },
       release: { value: 0 },
-      connect: vi.fn(function connect() { return this }),
+      connect: vi.fn(function connect(this: object) { return this }),
     }))
 
     class MockAudioContext {

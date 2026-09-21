@@ -73,7 +73,7 @@ const COPY = {
   },
 } as const
 
-const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch) ?? 0
+const getFrequency = (pitch: PianoKey) => pitch in PITCH_INFO ? PITCH_INFO[pitch as Pitch].frequency : BLACK_KEY_FREQUENCIES.get(pitch as BlackKey) ?? 0
 
 function getAudioContext() {
   if (audioContext) return audioContext
