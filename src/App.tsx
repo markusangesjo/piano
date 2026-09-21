@@ -43,6 +43,31 @@ const MIDI_LABELS: Record<number, string> = {
   71: 'B4',
   72: 'C5',
 }
+// Note-name templates for every semitone, used to label pitches across the
+// full piano spectrum (not just the C4-C5 octave covered by MIDI_LABELS).
+const NOTE_NAME_TEMPLATES: ReadonlyArray<(octave: number) => string> = [
+  (o) => `C${o}`,
+  (o) => `C♯${o} / D♭${o}`,
+  (o) => `D${o}`,
+  (o) => `D♯${o} / E♭${o}`,
+  (o) => `E${o}`,
+  (o) => `F${o}`,
+  (o) => `F♯${o} / G♭${o}`,
+  (o) => `G${o}`,
+  (o) => `G♯${o} / A♭${o}`,
+  (o) => `A${o}`,
+  (o) => `A♯${o} / B♭${o}`,
+  (o) => `B${o}`,
+]
+// A0 (lowest key on a standard 88-key piano) to C8 (highest key), in MIDI numbers.
+const MIN_PIANO_MIDI = 21
+const MAX_PIANO_MIDI = 108
+function midiToNoteLabel(midi: number): string | null {
+  if (midi < MIN_PIANO_MIDI || midi > MAX_PIANO_MIDI) return null
+  const octave = Math.floor(midi / 12) - 1
+  const index = ((midi % 12) + 12) % 12
+  return NOTE_NAME_TEMPLATES[index](octave)
+}
 
 export const PITCH_INFO: Record<Pitch, { letter: string; octave: number; y: number; frequency: number; color: string; hint: Record<Language, string> }> = {
   C4: { letter: 'C', octave: 4, y: 150, frequency: 261.63, color: '#7d70dc', hint: { sv: 'C4 är mitt-C – precis mitt på pianot.', en: 'C4 is middle C — right at the heart of the piano.' } },
@@ -353,7 +378,7 @@ type PitchDetection = {
   rms: number
 }
 
-function detectPitch(buffer: Float32Array, sampleRate: number): PitchDetection | null {
+function detectPitch(buffer: Float32Array, sampleRate: number, minFrequency = 220, maxFrequency = 660): PitchDetection | null {
   const bufferSize = buffer.length
 
   let rms = 0
@@ -365,8 +390,9 @@ function detectPitch(buffer: Float32Array, sampleRate: number): PitchDetection |
   // tracks the true fundamental far more reliably than plain autocorrelation,
   // which tends to lock onto strong harmonics of real piano notes (an issue
   // most noticeable from G4 upward where those overtones sit inside range).
-  const minFrequency = 220 // margin below C4
-  const maxFrequency = 660 // margin above C5
+  // Defaults (220-660 Hz) give a tight margin around the app's C4-C5 practice
+  // octave; callers analysing the full piano spectrum (e.g. debug mode) pass
+  // wider bounds together with a larger analyser buffer.
   const maxLag = Math.min(Math.floor(sampleRate / minFrequency), bufferSize - 1)
   const minLag = Math.max(2, Math.floor(sampleRate / maxFrequency))
   if (maxLag <= minLag) return null
@@ -654,7 +680,9 @@ function App() {
       const analyser = audioContext.createAnalyser()
       // A smaller window shortens how long a new note has to sound before it
       // dominates the analysis buffer, which noticeably cuts detection latency.
-      analyser.fftSize = 1024
+      // Debug mode trades a bit of that latency for a much larger window so
+      // the low end of the piano (down to A0) has enough samples to resolve.
+      analyser.fftSize = debugMode ? 4096 : 1024
       analyser.smoothingTimeConstant = 0.2
 
       const source = audioContext.createMediaStreamSource(stream)
@@ -672,27 +700,31 @@ function App() {
       void requestWakeLock()
 
       const buffer = new Float32Array(analyser.fftSize)
+      // Debug mode analyses the full 88-key spectrum (A0-C8); other modes stay
+      // tightly tuned to the app's C4-C5 practice octave to avoid octave errors.
+      const minFrequency = debugMode ? 24 : 220
+      const maxFrequency = debugMode ? 4300 : 660
       const listen = () => {
         const activeAnalyser = analyserRef.current
         if (!activeAnalyser || practiceCompleteRef.current) return
 
         activeAnalyser.getFloatTimeDomainData(buffer)
-        const detection = detectPitch(buffer, audioContext.sampleRate)
+        const detection = detectPitch(buffer, audioContext.sampleRate, minFrequency, maxFrequency)
 
         if (!detection) {
           stableFramesRef.current = 0
           lastMidiRef.current = null
-          if (debugModeRef.current) {
-            setDebugInfo(null)
-            setDebugUnstable(null)
-          }
+          // Debug mode keeps showing the last reading instead of clearing it,
+          // since real playing has brief silences between notes and there's
+          // rarely time to read the details before they vanish.
+          if (debugModeRef.current) setDebugUnstable(null)
           rafRef.current = requestAnimationFrame(listen)
           return
         }
 
         const { frequency, clarity, rms } = detection
         const midi = frequencyToMidi(frequency)
-        const label = MIDI_LABELS[midi]
+        const label = debugModeRef.current ? midiToNoteLabel(midi) : MIDI_LABELS[midi]
 
         if (!label) {
           stableFramesRef.current = 0
