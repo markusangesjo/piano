@@ -101,6 +101,11 @@ function getMasterOutput(context: AudioContext) {
   return masterOutput
 }
 
+export function resetAudioState() {
+  audioContext = null
+  masterOutput = null
+}
+
 function playTone(pitch: PianoKey) {
   try {
     const context = getAudioContext()

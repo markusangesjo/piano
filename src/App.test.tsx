@@ -1,17 +1,19 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import App, { BLACK_KEYS, PITCHES, PITCH_INFO } from './App'
+import App, { BLACK_KEYS, PITCHES, PITCH_INFO, resetAudioState } from './App'
 
 describe('Note Nest lesson', () => {
   const originalAudioContext = window.AudioContext
 
   beforeEach(() => {
     window.localStorage.clear()
+    resetAudioState()
   })
 
   afterEach(() => {
-    if (originalAudioContext) window.AudioContext = originalAudioContext
-    else (window as typeof window & { AudioContext?: typeof AudioContext }).AudioContext = undefined
+    resetAudioState()
+    if (originalAudioContext) Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: originalAudioContext })
+    else Reflect.deleteProperty(window, 'AudioContext')
   })
 
   it('defaults to Swedish and shows the note alphabet and piano keys', () => {
@@ -128,7 +130,7 @@ describe('Note Nest lesson', () => {
       createDynamicsCompressor = createDynamicsCompressor
     }
 
-    window.AudioContext = MockAudioContext as unknown as typeof AudioContext
+    Object.defineProperty(window, 'AudioContext', { configurable: true, writable: true, value: MockAudioContext as unknown as typeof AudioContext })
 
     render(<App />)
     await user.click(screen.getByRole('button', { name: 'Spela C4, mitt-C' }))
