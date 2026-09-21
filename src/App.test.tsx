@@ -237,6 +237,7 @@ describe('Note Nest lesson', () => {
     const user = userEvent.setup()
     render(<App />)
 
+    await user.click(screen.getByRole('button', { name: 'Låtar' }))
     await user.click(screen.getByRole('button', { name: 'Blinka lilla stjärna' }))
 
     expect(screen.getByRole('heading', { level: 1, name: 'Spela Blinka lilla stjärna' })).toBeInTheDocument()
@@ -244,6 +245,17 @@ describe('Note Nest lesson', () => {
     expect(screen.getByText('Spela nästa ton: C4')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Starta mikrofon' })).toBeInTheDocument()
     expect(screen.getByLabelText('Spela Blinka lilla stjärna').querySelectorAll('.song-sequence .current')).toHaveLength(1)
+  })
+
+  it('lets players choose the Spain Is a Country song too', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Låtar' }))
+    await user.click(screen.getByRole('button', { name: 'Spanien är ett land' }))
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Spela Spanien är ett land' })).toBeInTheDocument()
+    expect(screen.getByText('SPANIEN ÄR ETT LAND · NOT 1 AV 12')).toBeInTheDocument()
   })
 
   it('shows a helpful message when microphone permission is denied', async () => {
