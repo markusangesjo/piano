@@ -96,7 +96,7 @@ function Staff({ pitch, copy }: { pitch: Pitch; copy: typeof COPY[Language] }) {
   </div>
 }
 
-function Piano({ active, onPick, copy, includeBlackKeys = true }: { active: PianoKey; onPick: (pitch: PianoKey) => void; copy: typeof COPY[Language]; includeBlackKeys?: boolean }) {
+function Piano({ active, onPick, copy, includeBlackKeys = true }: { active: PianoKey | null; onPick: (pitch: PianoKey) => void; copy: typeof COPY[Language]; includeBlackKeys?: boolean }) {
   return <div className={`piano ${includeBlackKeys ? 'has-black-keys' : ''}`} aria-label={copy.keyboard}>
     {PITCHES.map((pitch) => <button key={pitch} className={`white-key ${active === pitch ? 'active' : ''}`} style={{ '--key-color': PITCH_INFO[pitch].color } as React.CSSProperties} onClick={() => { onPick(pitch); playTone(pitch) }} aria-label={copy.playNote(pitch)}><span>{pitch}</span>{pitch === 'C4' && <small className="middle-c-marker">{copy.middleC}</small>}</button>)}
     {includeBlackKeys && BLACK_KEYS.map((key, index) => <button key={key.id} className={`black-key ${active === key.id ? 'active' : ''}`} style={{ left: `${((index === 0 ? 1 : index === 1 ? 2 : index + 2) * 100) / 8}%` }} onClick={() => { onPick(key.id); playTone(key.id) }} aria-label={copy.blackKey(key.label)}><span>{key.label}</span></button>)}
@@ -137,7 +137,7 @@ function App() {
       <button className="primary" onClick={() => setTab('quiz')}>{copy.ready} <span>→</span></button>
     </section> : <section className="page quiz-page">
       <div className="intro"><p className="eyebrow">{copy.round(streak + 1)}</p><h1 dangerouslySetInnerHTML={{ __html: copy.which }} /><p className="lede">{copy.read}</p></div>
-      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer ?? quizPitch} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className={`feedback ${answer === quizPitch ? 'correct' : 'oops'}`} role="status">{answer === quizPitch ? copy.nice(quizPitch) : copy.almost(answer)}</div>}</div>
+      <div className="quiz-card"><Staff pitch={quizPitch} copy={copy} /><div className="quiz-prompt">{copy.answer}</div><Piano active={answer ? (answer === quizPitch ? answer : quizPitch) : null} onPick={chooseAnswer} copy={copy} includeBlackKeys={false} /><p className="quiz-scope">{copy.quizScope}</p>{answer && <div className={`feedback ${answer === quizPitch ? 'correct' : 'oops'}`} role="status">{answer === quizPitch ? copy.nice(quizPitch) : copy.almost(answer)}</div>}</div>
       {answer && <button className="primary" onClick={nextQuestion}>{answer === quizPitch ? copy.next : copy.another} <span>→</span></button>}
     </section>}
     <footer>{copy.footer}</footer>

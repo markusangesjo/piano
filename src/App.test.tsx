@@ -67,4 +67,17 @@ describe('Note Nest lesson', () => {
     expect(screen.queryByRole('button', { name: 'Spela C♯4 / D♭4' })).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Spela /i })).toHaveLength(PITCHES.length)
   })
+
+  it('does not reveal the quiz answer before selection and highlights feedback afterward', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /redo för quiz/i }))
+
+    const targetKey = screen.getByRole('button', { name: 'Spela E4' })
+    expect(targetKey).not.toHaveClass('active')
+
+    await user.click(screen.getByRole('button', { name: 'Spela A4' }))
+    expect(screen.getByRole('button', { name: 'Spela E4' })).toHaveClass('active')
+    expect(screen.getByRole('button', { name: 'Spela A4' })).not.toHaveClass('active')
+  })
 })
