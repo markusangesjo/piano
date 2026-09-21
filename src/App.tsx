@@ -379,13 +379,13 @@ type PitchDetection = {
   rms: number
 }
 
-function detectPitch(buffer: Float32Array, sampleRate: number, minFrequency = 220, maxFrequency = 660): PitchDetection | null {
+function detectPitch(buffer: Float32Array, sampleRate: number, minFrequency = 220, maxFrequency = 660, minimumRms = 0.01): PitchDetection | null {
   const bufferSize = buffer.length
 
   let rms = 0
   for (let i = 0; i < bufferSize; i += 1) rms += buffer[i] * buffer[i]
   rms = Math.sqrt(rms / bufferSize)
-  if (rms < 0.01) return null
+  if (rms < minimumRms) return null
 
   // A YIN-style detector (difference function + cumulative mean normalization)
   // tracks the true fundamental far more reliably than plain autocorrelation,
@@ -714,7 +714,8 @@ function App() {
         if (!activeAnalyser || practiceCompleteRef.current) return
 
         activeAnalyser.getFloatTimeDomainData(buffer)
-        const detection = detectPitch(buffer, audioContext.sampleRate, minFrequency, maxFrequency)
+        const minimumRms = debugMode ? 0.003 : 0.01
+        const detection = detectPitch(buffer, audioContext.sampleRate, minFrequency, maxFrequency, minimumRms)
 
         if (!detection) {
           stableFramesRef.current = 0
